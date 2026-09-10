@@ -2,6 +2,8 @@
 
 Cerrojo Security Toolkit provides focused WordPress security posture diagnostics and eight reversible security tools: six under **Hardening**, plus dedicated **Security headers** and **REST API** tools. It reports evidence, not a guarantee of invulnerability.
 
+Available on [WordPress.org](https://wordpress.org/plugins/cerrojo-security-toolkit/).
+
 ## Quick navigation
 
 Open **Tools > Cerrojo Security Toolkit** as an administrator with `manage_options`, then choose the tab for the job:
