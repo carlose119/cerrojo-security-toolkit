@@ -21,11 +21,18 @@ use Throwable;
 final class CoreExpectedFileVerifier
 {
     private readonly Closure $hasher;
+    private readonly ?Closure $readObserver;
 
-    /** @param callable(resource): mixed|null $hasher Trusted test seam; must not close the handle. */
-    public function __construct(?callable $hasher = null)
+    /**
+     * @param callable(resource): mixed|null $hasher Legacy trusted seam; must not close the handle.
+     * @param callable(resource, int, int): void|null $readObserver Bounded-only trusted observer,
+     *        called after production fread/hash_update with requested/actual bytes.
+     *        Must not read, seek, close or mutate the stream; cannot supply a digest.
+     */
+    public function __construct(?callable $hasher = null, ?callable $readObserver = null)
     {
         $this->hasher = $hasher === null ? self::hashStream(...) : Closure::fromCallable($hasher);
+        $this->readObserver = $readObserver === null ? null : Closure::fromCallable($readObserver);
     }
 
     /**
@@ -35,8 +42,65 @@ final class CoreExpectedFileVerifier
      */
     public function verify(string $root, string $relativePath, string $expectedMd5): string
     {
+        return $this->verifyFile($root, $relativePath, $expectedMd5, $this->hasher);
+    }
+
+    /**
+     * Cooperative only: stat/fopen/fread cannot be interrupted. Legacy hashing
+     * is never used. Requests and actual hashed bytes stay within maxBytes
+     * (PHP stream bytes, not a limit on OS/PHP internal buffering).
+     * Exact byte equality is conservatively incomplete, even for an empty file
+     * with zero allowance: no extra EOF probe is permitted at the boundary.
+     * Completion requires EOF with allowance left and a final time checkpoint.
+     * Usage survives ordinary failures; null exhaustion is not budget exhaustion.
+     */
+    public function verifyBounded(
+        string $root,
+        string $relativePath,
+        string $expectedMd5,
+        CoreExpectedFileBudget $budget,
+    ): CoreExpectedFileVerification {
+        $bytesRead = 0;
+        $exhaustion = null;
+        $checkpoint = static function () use ($budget, &$bytesRead, &$exhaustion): bool {
+            $exhaustion = $budget->checkpoint($bytesRead);
+            return $exhaustion !== null;
+        };
+        $hash = function ($handle) use ($budget, &$bytesRead, $checkpoint): string|false {
+            $hash = hash_init('md5');
+            while (!feof($handle)) {
+                if ($checkpoint()) {
+                    return false;
+                }
+                $requested = min(65536, $budget->maxBytes - $bytesRead);
+                $chunk = @fread($handle, $requested);
+                if ($chunk === false || ($chunk === '' && !feof($handle))) {
+                    return false;
+                }
+                hash_update($hash, $chunk);
+                $bytesRead += strlen($chunk);
+                if ($this->readObserver !== null) {
+                    ($this->readObserver)($handle, $requested, strlen($chunk));
+                }
+            }
+            return hash_final($hash);
+        };
+        $status = $this->verifyFile($root, $relativePath, $expectedMd5, $hash, $checkpoint);
+        return new CoreExpectedFileVerification($status, $bytesRead, $exhaustion);
+    }
+
+    private function verifyFile(
+        string $root,
+        string $relativePath,
+        string $expectedMd5,
+        Closure $hash,
+        ?Closure $checkpoint = null,
+    ): string {
         $handle = null;
         try {
+            if ($checkpoint !== null && $checkpoint()) {
+                return 'incomplete';
+            }
             // Reuse the manifest boundary, including exclusions, without duplicating syntax.
             $manifest = CoreChecksumManifest::fromResponse(['checksums' => [$relativePath => $expectedMd5]]);
             $expected = $manifest->checksums[$relativePath];
@@ -62,6 +126,9 @@ final class CoreExpectedFileVerifier
             if ($before === null) {
                 return 'incomplete';
             }
+            if ($checkpoint !== null && $checkpoint()) {
+                return 'incomplete';
+            }
             $handle = @fopen($file, 'rb');
             if ($handle === false || $this->identity(@fstat($handle)) !== $before[$file]) {
                 return 'incomplete';
@@ -70,10 +137,13 @@ final class CoreExpectedFileVerifier
             if ($this->snapshot($root, $file) !== $before) {
                 return 'incomplete';
             }
-            $digest = ($this->hasher)($handle);
+            $digest = $hash($handle);
             if (!is_string($digest) || preg_match('/\A[0-9a-f]{32}\z/i', $digest) !== 1
                 || $this->identity(@fstat($handle)) !== $before[$file]
                 || $this->snapshot($root, $file) !== $before) {
+                return 'incomplete';
+            }
+            if ($checkpoint !== null && $checkpoint()) {
                 return 'incomplete';
             }
             return hash_equals($expected, strtolower($digest)) ? 'match' : 'modified';

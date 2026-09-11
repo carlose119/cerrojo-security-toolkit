@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace BastionSecurityWP\Tests\Unit;
 
+use BastionSecurityWP\CoreIntegrity\CoreExpectedFileBudget;
+use BastionSecurityWP\CoreIntegrity\CoreExpectedFileVerification;
 use BastionSecurityWP\CoreIntegrity\CoreExpectedFileVerifier;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -174,6 +176,220 @@ final class CoreExpectedFileVerifierTest extends TestCase
             $this->fixture . '/root', 'core.php', strtoupper(md5($bytes)),
         ));
         self::assertSame('incomplete', $this->verify('core.php', static fn () => 'invalid'));
+    }
+
+    #[DataProvider('boundedCases')]
+    public function testBoundedReads(string $content, int $limit, string $status, ?string $exhaustion, int $used): void
+    {
+        file_put_contents($this->fixture . '/root/core.php', $content);
+        $reads = [];
+        $handle = null;
+        $legacyCalled = false;
+        $verifier = new CoreExpectedFileVerifier(
+            static function () use (&$legacyCalled): string {
+                $legacyCalled = true;
+                return md5('core');
+            },
+            static function ($stream, int $requested, int $actual) use (&$reads, &$handle): void {
+                $reads[] = [$requested, $actual];
+                $handle = $stream;
+            },
+        );
+        $result = $verifier->verifyBounded($this->fixture . '/root', 'core.php', md5('core'),
+            new CoreExpectedFileBudget($limit, 10.0, static fn (): float => 0.0));
+        self::assertSame($status, $result->status);
+        self::assertSame($exhaustion, $result->exhaustion);
+        self::assertSame($used, $result->bytesRead);
+        self::assertSame($status !== 'incomplete', $result->complete);
+        self::assertFalse($legacyCalled);
+        $remaining = $limit;
+        foreach ($reads as [$requested, $actual]) {
+            self::assertGreaterThan(0, $requested);
+            self::assertLessThanOrEqual(min(65536, $remaining), $requested);
+            self::assertLessThanOrEqual($requested, $actual);
+            $remaining -= $actual;
+        }
+        self::assertSame($used, $limit - $remaining);
+        if ($handle !== null) {
+            self::assertFalse(is_resource($handle));
+        }
+        foreach (['status', 'exhaustion', 'bytesRead', 'complete'] as $property) {
+            try {
+                $result->$property = $result->$property;
+                self::fail('Result must be immutable.');
+            } catch (\Error $error) {
+                self::assertStringContainsString('readonly', $error->getMessage());
+            }
+        }
+    }
+
+    public static function boundedCases(): iterable
+    {
+        yield 'match' => ['core', 5, 'match', null, 4];
+        yield 'modified' => ['other', 6, 'modified', null, 5];
+        yield 'partial' => ['core', 3, 'incomplete', 'bytes', 3];
+        yield 'exact without EOF probe' => ['core', 4, 'incomplete', 'bytes', 4];
+        yield 'zero' => ['core', 0, 'incomplete', 'bytes', 0];
+        yield 'empty zero' => ['', 0, 'incomplete', 'bytes', 0];
+        yield 'empty EOF' => ['', 1, 'modified', null, 0];
+        yield 'chunks' => [str_repeat('x', 65540), 65539, 'incomplete', 'bytes', 65539];
+        yield 'complete chunks' => [str_repeat('x', 65540), 65541, 'modified', null, 65540];
+    }
+
+    public function testDeadlineCheckpointsAndOrdinaryFailure(): void
+    {
+        foreach ([0, 1, 2, 3] as $expireAt) {
+            $ticks = 0;
+            $openStreams = count(get_resources('stream'));
+            $checkpointStreams = [];
+            $reads = [];
+            $handle = null;
+            $budget = new CoreExpectedFileBudget(100000, 1.0,
+                static function () use (&$ticks, $expireAt, &$checkpointStreams): float {
+                    $checkpointStreams[] = count(get_resources('stream'));
+                    return $ticks++ >= $expireAt ? 1.0 : 0.0;
+                });
+            file_put_contents($this->fixture . '/root/core.php', str_repeat('x', 65540));
+            $verifier = new CoreExpectedFileVerifier(null,
+                static function ($stream, int $requested, int $actual) use (&$reads, &$handle): void {
+                    $reads[] = $actual;
+                    $handle = $stream;
+                });
+            $result = $verifier->verifyBounded($this->fixture . '/root', 'core.php', md5('core'), $budget);
+            self::assertSame('incomplete', $result->status);
+            self::assertSame('time', $result->exhaustion);
+            self::assertSame($expireAt === 3 ? 65536 : 0, $result->bytesRead);
+            self::assertSame($result->bytesRead, array_sum($reads));
+            self::assertSame($openStreams + ($expireAt >= 2 ? 1 : 0), $checkpointStreams[$expireAt]);
+            self::assertSame($openStreams, count(get_resources('stream')));
+            if ($handle !== null) {
+                self::assertFalse(is_resource($handle));
+            }
+        }
+        $budget = new CoreExpectedFileBudget(5, 10.0, static fn (): float => 0.0);
+        $result = (new CoreExpectedFileVerifier())->verifyBounded(
+            $this->fixture . '/root', 'absent.php', md5('core'), $budget);
+        self::assertSame('incomplete', $result->status);
+        self::assertNull($result->exhaustion);
+        self::assertSame(0, $result->bytesRead);
+        self::assertSame('time', (new CoreExpectedFileBudget(1, 0.0, static fn (): float => 0.0))->checkpoint(0));
+        self::assertSame('time', (new CoreExpectedFileBudget(1, 1.0, static fn (): float => 1.0))->checkpoint(0));
+    }
+
+    public function testBudgetValidationAndImmutableLimits(): void
+    {
+        foreach ([[-1, 1.0], [1, -1.0], [1, INF], [1, NAN]] as [$bytes, $deadline]) {
+            try {
+                new CoreExpectedFileBudget($bytes, $deadline);
+                self::fail('Invalid budget accepted.');
+            } catch (\InvalidArgumentException) {
+                self::assertTrue(true);
+            }
+        }
+        foreach ([PHP_INT_MAX + 1.0, INF, NAN] as $bytes) {
+            try {
+                new CoreExpectedFileBudget($bytes, 1.0);
+                self::fail('Non-integer byte limit accepted.');
+            } catch (\TypeError) {
+                self::assertTrue(true);
+            }
+        }
+        $budget = new CoreExpectedFileBudget(PHP_INT_MAX, 1.0, static fn (): float => 0.0);
+        self::assertNull($budget->checkpoint(PHP_INT_MAX - 1));
+        self::assertSame('bytes', $budget->checkpoint(PHP_INT_MAX));
+        foreach (['maxBytes', 'deadline'] as $property) {
+            try {
+                $budget->$property = $budget->$property;
+                self::fail('Budget must be immutable.');
+            } catch (\Error $error) {
+                self::assertStringContainsString('readonly', $error->getMessage());
+            }
+        }
+    }
+
+    public function testBoundedFailureAndPostReadChecksCloseHandles(): void
+    {
+        foreach (['throw', 'change', 'deadline'] as $case) {
+            file_put_contents($this->fixture . '/root/core.php', 'core');
+            $handle = null;
+            $written = null;
+            $now = 0.0;
+            $budget = new CoreExpectedFileBudget(5, 1.0, static function () use (&$now): float {
+                return $now;
+            });
+            $verifier = new CoreExpectedFileVerifier(null,
+                function ($stream) use ($case, &$handle, &$written, &$now): void {
+                    $handle = $stream;
+                    if ($case === 'throw') {
+                        throw new \RuntimeException('Observer failed after hashing.');
+                    }
+                    if ($case === 'change') {
+                        $written = file_put_contents($this->fixture . '/root/core.php', 'replacement');
+                    }
+                    if ($case === 'deadline') {
+                        $now = 1.0;
+                    }
+                });
+            $result = $verifier->verifyBounded($this->fixture . '/root', 'core.php', md5('core'), $budget);
+            self::assertSame('incomplete', $result->status, $case);
+            self::assertFalse($result->complete);
+            self::assertSame(4, $result->bytesRead);
+            self::assertSame($case === 'deadline' ? 'time' : null, $result->exhaustion);
+            self::assertNotNull($handle);
+            self::assertFalse(is_resource($handle));
+            if ($case === 'change') {
+                self::assertSame(11, $written);
+            }
+        }
+    }
+
+    public function testDeadlineIsNotResetAndUnsafePathsRemainIncomplete(): void
+    {
+        $now = 0.0;
+        $budget = new CoreExpectedFileBudget(5, 1.0, static function () use (&$now): float {
+            return $now;
+        });
+        $verifier = new CoreExpectedFileVerifier();
+        foreach (self::unsafePaths() as [$path]) {
+            $result = $verifier->verifyBounded($this->fixture . '/root', $path, md5('core'), $budget);
+            self::assertSame('incomplete', $result->status);
+            self::assertSame(0, $result->bytesRead);
+            self::assertNull($result->exhaustion);
+        }
+        self::assertSame('match', $verifier->verifyBounded($this->fixture . '/root', 'core.php', md5('core'), $budget)->status);
+        $now = 1.0;
+        $result = $verifier->verifyBounded($this->fixture . '/root', 'core.php', md5('core'), $budget);
+        self::assertSame('time', $result->exhaustion);
+        self::assertSame(0, $result->bytesRead);
+    }
+
+    public function testInvalidCheckpointAndResultStates(): void
+    {
+        foreach ([-1.0, INF, NAN, 'invalid'] as $now) {
+            try {
+                (new CoreExpectedFileBudget(1, 1.0, static fn () => $now))->checkpoint(0);
+                self::fail('Invalid clock accepted.');
+            } catch (\InvalidArgumentException) {
+                self::assertTrue(true);
+            }
+        }
+        foreach ([-1, 2] as $usage) {
+            try {
+                (new CoreExpectedFileBudget(1, 1.0))->checkpoint($usage);
+                self::fail('Invalid usage accepted.');
+            } catch (\InvalidArgumentException) {
+                self::assertTrue(true);
+            }
+        }
+        foreach ([['bad', 0, null], ['match', -1, null], ['match', 0, 'time'],
+            ['incomplete', 0, 'bad']] as [$status, $usage, $exhaustion]) {
+            try {
+                new CoreExpectedFileVerification($status, $usage, $exhaustion);
+                self::fail('Invalid result accepted.');
+            } catch (\InvalidArgumentException) {
+                self::assertTrue(true);
+            }
+        }
     }
 
     private function skipCapability(string $reason): never
