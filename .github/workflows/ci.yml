@@ -14,6 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  wordpress-712-checksum:
+    # Temporary digest discovery from the official TLS archive and published SHA-1;
+    # this does not establish plugin compatibility with WordPress 7.1.2.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify official WordPress 7.1.2 archive and report SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/wordpress-7.1.2-checksum.zip"
+          trap 'rm -f -- "$archive"' EXIT
+          curl --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --connect-timeout 30 --max-time 120 --output "$archive" \
+            https://downloads.wordpress.org/release/wordpress-7.1.2.zip
+          printf '%s  %s\n' 'fab6ce3a905a1f4085ffff7fd9920bc693f5dd94' "$archive" | sha1sum --check --strict
+          digest="$(sha256sum "$archive")"
+          digest="${digest%% *}"
+          printf 'WORDPRESS_712_ARCHIVE_SHA256=%s\n' "$digest"
+
   test:
     runs-on: ubuntu-latest
     strategy:
