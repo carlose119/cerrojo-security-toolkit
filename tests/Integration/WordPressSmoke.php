@@ -31,7 +31,7 @@ $_SERVER['REQUEST_METHOD'] = 'GET';
 $_SERVER['REQUEST_URI'] = '/wp-admin/tools.php?page=bastion-security-wp';
 require $root . '/wp-load.php';
 
-require_once ABSPATH . 'wp-admin/includes/plugin.php';
+require_once ABSPATH . 'wp-admin/includes/admin.php';
 smokeCheck(get_bloginfo('version') === '7.1.2', 'Unexpected WordPress version.');
 smokeCheck(is_plugin_active('bastion-security-wp/cerrojo-security-toolkit.php'), 'Cerrojo is not active.');
 smokeCheck(class_exists(BastionSecurityWP\Bootstrap::class, false), 'Cerrojo bootstrap was not loaded.');
