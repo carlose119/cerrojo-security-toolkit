@@ -272,11 +272,13 @@ composer install
 composer check
 ```
 
-CI runs the same validation, full PHPUnit suite, dependency audit, and PHP syntax checks on Ubuntu with PHP 8.1, 8.2, 8.3, and 8.4. A separate hosted job installs WordPress, verifies its schema, activates both plugins, and has passed the non-interference assertions for PHP 8.4, WordPress 7.0.4, WooCommerce 11.0.1, and MariaDB 11.4.7. This is evidence for that exact tuple, not a general WooCommerce compatibility claim.
+CI runs the same validation, full PHPUnit suite, dependency audit, and PHP syntax checks on Ubuntu with PHP 8.1, 8.2, 8.3, and 8.4. A separate hosted job installs WordPress, verifies its schema, activates both plugins, and has passed the non-interference assertions for PHP 8.4, WordPress 7.1.2, WooCommerce 11.0.1, and MariaDB 11.4.7. This is evidence for that exact tuple, not a general WooCommerce compatibility claim.
 
 ## Build
 
-Build and verify the installable ZIP locally:
+**Preserved archive in this checkout:** `.build/cerrojo-security-toolkit.zip` is historical local output identifying as version 0.2.2, not a verified current-source artifact or the published 0.3.0 release. Do not distribute it as 0.3.0 or overwrite it here. Use the [official v0.3.0 release](https://github.com/carlose119/cerrojo-security-toolkit/releases/tag/v0.3.0) and its [recorded release evidence](odd/tasks/release-0.3.0.md) for published provenance; location or filename alone does not establish it.
+
+Build and verify the installable ZIP locally (not in this checkout while preserving its archive):
 
 ```shell
 composer package

@@ -1,6 +1,6 @@
 # Proposal: manual, resumable WordPress core integrity checks
 
-**Status: Withdrawn from current product scope.** By explicit user authorization, the entire exclusive core-integrity implementation, tests, prototype, and workflow were removed. Both the resumable design and suggested simplified checker are withdrawn. The historical proposal below is retained for context only; it is not authorization to resume implementation or evidence of runtime verification.
+**Status: Withdrawn from current product scope.** By explicit user authorization, the entire exclusive core-integrity implementation, tests, prototype, and workflow were removed. Both the resumable design and suggested simplified checker are withdrawn. The historical proposal below is retained for context only; it is not authorization to resume implementation or evidence of runtime verification. See the [historical withdrawal index](../../../odd/tasks/core-integrity-withdrawal-index.md).
 
 ## Intent
 
