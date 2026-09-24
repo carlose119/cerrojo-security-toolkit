@@ -19,17 +19,6 @@ phase_rules:
   apply: "Use test-first changes; implementation is approval-gated."
   verify: "Run the relevant PHPUnit and static validation commands."
 
-feature_context:
-  selected: "Core-integrity checker"
-  scope: "Observation only; no repair or deletion."
-  execution: "Manual and scheduled; official WordPress.org checksum requests are allowed."
-  unresolved:
-    - schedule frequency
-    - retention
-    - notification recipients
-    - multisite scope
-    - exact comparison boundaries
-
 testing:
   runner: PHPUnit 10.5
   primary_command: composer test

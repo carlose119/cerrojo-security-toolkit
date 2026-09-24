@@ -1,5 +1,7 @@
 # Explore a bounded WordPress core integrity checker
 
+> **Withdrawn historical context:** The core-integrity checker and its manual/resumable scope were withdrawn and removed. See [`proposal.md`](proposal.md) for the withdrawal record. The exploration below is historical context only; it does not authorize reintroducing the removed code.
+
 ## Executive summary
 
 The plugin has clear seams for a read-only core integrity feature, but the product contract is not ready for proposal. Manual and scheduled checks are confirmed; repair/deletion and uploading file content are excluded. Schedule frequency, retention, recipients/notification conditions, multisite behavior, and whether “unexpected files” are compared remain explicit approval gates.
