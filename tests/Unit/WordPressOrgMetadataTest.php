@@ -12,7 +12,7 @@ final class WordPressOrgMetadataTest extends TestCase
 {
     private const EXPECTED_PLUGIN_NAME = 'Cerrojo Security Toolkit';
     private const EXPECTED_TEXT_DOMAIN = 'cerrojo-security-toolkit';
-    private const EXPECTED_VERSION = '0.2.2';
+    private const EXPECTED_VERSION = '0.3.0';
 
     public function testPublicPluginHeaderUsesWordPressOrgIdentity(): void
     {
@@ -35,7 +35,7 @@ final class WordPressOrgMetadataTest extends TestCase
         self::assertStringStartsWith('=== Cerrojo Security Toolkit ===', $readme);
         self::assertSame('carlose119', $headers['Contributors'] ?? null);
         self::assertSame('6.8', $headers['Requires at least'] ?? null);
-        self::assertSame('7.1', $headers['Tested up to'] ?? null);
+        self::assertSame('7.1.2', $headers['Tested up to'] ?? null);
         self::assertSame(self::EXPECTED_VERSION, $headers['Stable tag'] ?? null);
         self::assertSame('8.1', $headers['Requires PHP'] ?? null);
         self::assertSame('GPLv2 or later', $headers['License'] ?? null);
@@ -44,6 +44,11 @@ final class WordPressOrgMetadataTest extends TestCase
         $tags = array_values(array_filter(array_map('trim', explode(',', $headers['Tags'] ?? ''))));
         self::assertNotEmpty($tags);
         self::assertLessThanOrEqual(5, count($tags));
+    }
+
+    public function testReadmeStartsChangelogWithCurrentRelease(): void
+    {
+        self::assertMatchesRegularExpression('/^== Changelog ==\r?\n\r?\n= 0\.3\.0 =\r?\n/m', $this->readme());
     }
 
     public function testReadmeVersionsAndRequirementsAgreeWithPluginHeader(): void
