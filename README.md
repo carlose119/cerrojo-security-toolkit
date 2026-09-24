@@ -4,6 +4,8 @@ Cerrojo Security Toolkit provides focused WordPress security posture diagnostics
 
 Available on [WordPress.org](https://wordpress.org/plugins/cerrojo-security-toolkit/).
 
+Source repository: [carlose119/cerrojo-security-toolkit](https://github.com/carlose119/cerrojo-security-toolkit).
+
 ## Quick navigation
 
 Open **Tools > Cerrojo Security Toolkit** as an administrator with `manage_options`, then choose the tab for the job:
