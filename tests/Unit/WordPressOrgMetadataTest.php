@@ -64,8 +64,8 @@ final class WordPressOrgMetadataTest extends TestCase
     public function testReadmeDescriptionsStayWithinDirectoryLimits(): void
     {
         $readme = $this->readme();
-        self::assertMatchesRegularExpression('/\n\n([^\r\n]+)\r?\n\r?\n== Description ==\r?\n/s', $readme);
-        preg_match('/\n\n([^\r\n]+)\r?\n\r?\n== Description ==\r?\n/s', $readme, $shortMatch);
+        self::assertMatchesRegularExpression('/\r?\n\r?\n([^\r\n]+)\r?\n\r?\n== Description ==\r?\n/s', $readme);
+        preg_match('/\r?\n\r?\n([^\r\n]+)\r?\n\r?\n== Description ==\r?\n/s', $readme, $shortMatch);
         self::assertLessThanOrEqual(150, mb_strlen(trim($shortMatch[1])));
 
         self::assertMatchesRegularExpression('/== Description ==\r?\n(.*?)\r?\n== [^=]+ ==/s', $readme);
