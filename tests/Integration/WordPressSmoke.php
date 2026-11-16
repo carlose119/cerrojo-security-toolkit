@@ -32,7 +32,7 @@ $_SERVER['REQUEST_URI'] = '/wp-admin/tools.php?page=bastion-security-wp';
 require $root . '/wp-load.php';
 
 require_once ABSPATH . 'wp-admin/includes/admin.php';
-smokeCheck(get_bloginfo('version') === '7.1.2', 'Unexpected WordPress version.');
+smokeCheck(get_bloginfo('version') === '7.1.4', 'Unexpected WordPress version.');
 smokeCheck(is_plugin_active('bastion-security-wp/cerrojo-security-toolkit.php'), 'Cerrojo is not active.');
 smokeCheck(class_exists(BastionSecurityWP\Bootstrap::class, false), 'Cerrojo bootstrap was not loaded.');
 smokeCheck(has_filter('site_status_tests') !== false, 'Cerrojo diagnostics were not registered.');
@@ -90,4 +90,4 @@ try {
     $priorPingback === null ? delete_option($pingbackOption) : update_option($pingbackOption, $priorPingback);
 }
 
-fwrite(STDOUT, "BASTION_WP_712_SMOKE_OK: activation, dashboard and representative controls passed\n");
+fwrite(STDOUT, "BASTION_WP_714_SMOKE_OK: activation, dashboard and representative controls passed\n");

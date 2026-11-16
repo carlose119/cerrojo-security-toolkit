@@ -2,7 +2,7 @@
 Contributors: carlose119
 Tags: security, hardening, login security, security headers, rest api
 Requires at least: 6.8
-Tested up to: 7.1.2
+Tested up to: 7.1.4
 Stable tag: 0.3.0
 Requires PHP: 8.1
 License: GPLv2 or later

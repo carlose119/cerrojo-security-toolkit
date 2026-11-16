@@ -3,7 +3,7 @@ project:
   product_name: Cerrojo Security Toolkit
   type: wordpress-plugin
   language: PHP 8.1+
-  wordpress_compatibility: "6.8 through 7.1"
+  wordpress_compatibility: "6.8 through 7.1.4"
   description: "WordPress security posture diagnostics and reversible hardening tools."
 
 artifact_store: openspec
