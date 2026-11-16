@@ -167,16 +167,70 @@ final class RestSurfaceInventoryTest extends TestCase
     public function testInventoryRemainsPassiveAndRouteControlsAvoidInventoryAndAuthenticationCoupling(): void
     {
         $inventorySource = (string) file_get_contents(dirname(__DIR__, 2) . '/src/RestSurfaceInventory.php');
+        $classificationSource = (string) file_get_contents(dirname(__DIR__, 2) . '/src/RestExposureClassification.php');
         $policySource = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Security/RestRouteControlsPolicy.php');
         $bootstrapSource = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Bootstrap.php');
 
-        self::assertStringNotContainsString('->get_routes(', $inventorySource . $policySource);
+        $inventoryAndClassificationSource = $inventorySource . $classificationSource;
+        self::assertStringNotContainsString('->get_routes(', $inventoryAndClassificationSource . $policySource);
+        self::assertStringNotContainsString('call_user_func', $inventoryAndClassificationSource);
+        self::assertStringNotContainsString('->invoke', $inventoryAndClassificationSource);
+        self::assertStringContainsString('RestExposureClassification::classify', $inventorySource);
         self::assertStringNotContainsString('rest_endpoints', $policySource . $bootstrapSource);
         self::assertStringContainsString("add_filter('rest_request_before_callbacks'", $bootstrapSource);
         self::assertStringNotContainsString('rest_authentication_errors', $policySource . $bootstrapSource);
         self::assertStringNotContainsString('wp_is_application_passwords_available', $policySource . $bootstrapSource);
         self::assertStringNotContainsString('rest_jsonp_enabled', $policySource . $bootstrapSource);
         self::assertStringNotContainsString('rest_pre_dispatch', $policySource . $bootstrapSource);
+    }
+
+    public function testAggregateExposureCountsAreReportedStructurallyWithoutInvokingCallbacks(): void
+    {
+        $calls = 0;
+        $counting = static function () use (&$calls): bool {
+            ++$calls;
+
+            return true;
+        };
+        $inventory = $this->inventory([
+            'namespaces' => ['x/v1'],
+            'routes' => [
+                'x/v1' => [
+                    '/x/v1/absent' => [['methods' => ['GET' => true]]],
+                    '/x/v1/null' => [['methods' => ['GET' => true], 'permission_callback' => null]],
+                    '/x/v1/public' => [['methods' => ['GET' => true], 'permission_callback' => '__return_true']],
+                    '/x/v1/denied' => [['methods' => ['GET' => true], 'permission_callback' => '__return_false']],
+                    '/x/v1/opacity' => [
+                        ['methods' => ['GET' => true], 'permission_callback' => $counting],
+                        ['methods' => ['POST' => true], 'permission_callback' => [self::class, 'unrelated']],
+                        ['methods' => ['PATCH' => true], 'permission_callback' => 'secret-permission'],
+                        ['methods' => ['DELETE' => true], 'permission_callback' => 42],
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $inventory->report();
+        $serialized = serialize($result);
+
+        self::assertSame('good', $result['status']);
+        self::assertStringContainsString('2 with no permission callback registered', $result['description']);
+        self::assertStringContainsString('1 __return_true', $result['description']);
+        self::assertStringContainsString('1 __return_false', $result['description']);
+        self::assertStringContainsString('4 opaque', $result['description']);
+        self::assertStringContainsStringIgnoringCase('structural', $result['description']);
+        self::assertStringContainsStringIgnoringCase('opaque callbacks were not invoked', $result['description']);
+        self::assertStringContainsString('Showing 5 of 5 routes; 0 truncated.', $result['description']);
+        self::assertStringNotContainsString('secret-permission', $serialized);
+        self::assertSame(0, $calls, 'Aggregate classification must never invoke a permission callback.');
+    }
+
+    public function testAggregateExposureDegradesToNotAssessedAndReportsZeroClassesWhenRegistryUnavailable(): void
+    {
+        $result = (new RestSurfaceInventory())->report();
+
+        self::assertSame('recommended', $result['status']);
+        self::assertStringNotContainsString('__return_true', $result['description']);
     }
 
     /** @param array<mixed> $registry */

@@ -29,7 +29,7 @@ final class RestSurfaceInventory
                 return $this->notAssessed();
             }
 
-            $tuples = $this->tuples($registry['namespaces'], $registry['routes']);
+            [$tuples, $exposure] = $this->tuples($registry['namespaces'], $registry['routes']);
             $shown = array_slice($tuples, 0, self::ITEM_LIMIT);
             $items = array_map(function (array $tuple): string {
                 return sprintf(
@@ -44,11 +44,16 @@ final class RestSurfaceInventory
             return $this->result(
                 DiagnosticStatus::Good,
                 sprintf(
-                    '<p>Registered REST namespace, route pattern, and methods only. Showing %d of %d routes; %d truncated.</p><ul>%s</ul>',
+                    '<p>Registered REST namespace, route pattern, and methods only. Showing %d of %d routes; %d truncated.</p><ul>%s</ul><p>Permission-callback exposure across %d registered route handlers (structural counts from registered values only; opaque callbacks were not invoked): %d with no permission callback registered, %d __return_true, %d __return_false, %d opaque (authorization unknown).</p>',
                     count($shown),
                     count($tuples),
                     $truncated,
                     implode('', $items),
+                    array_sum($exposure),
+                    $exposure[RestExposureClassification::ABSENT] ?? 0,
+                    $exposure[RestExposureClassification::PUBLIC] ?? 0,
+                    $exposure[RestExposureClassification::DENIED] ?? 0,
+                    $exposure[RestExposureClassification::OPAQUE] ?? 0,
                 ),
                 '<p>This read-only inventory makes no security or authorization conclusion.</p>',
             );
@@ -59,11 +64,12 @@ final class RestSurfaceInventory
 
     /** @param array<mixed> $namespaces
      *  @param array<mixed> $routes
-     *  @return list<array{string, string, string}>
+     *  @return array{0: list<array{string, string, string}>, 1: array<string, int>}
      */
     private function tuples(array $namespaces, array $routes): array
     {
         $tuples = [];
+        $exposure = [];
         $namespaces = array_values(array_unique(array_filter($namespaces, 'is_string')));
         sort($namespaces, SORT_STRING);
 
@@ -78,11 +84,14 @@ final class RestSurfaceInventory
                 }
 
                 $methods = [];
+                $permissionClasses = [];
                 foreach ($handlers as $handler) {
                     if (! is_array($handler)) {
                         continue;
                     }
 
+                    $class = RestExposureClassification::classify($handler['permission_callback'] ?? null);
+                    $permissionClasses[$class] = ($permissionClasses[$class] ?? 0) + 1;
                     $registered = $handler['methods'] ?? null;
                     $candidates = is_string($registered) ? explode(',', $registered) : [];
                     if (is_array($registered)) {
@@ -102,12 +111,15 @@ final class RestSurfaceInventory
                 $methods = array_keys($methods);
                 sort($methods, SORT_STRING);
                 $tuples[] = [$namespace, $route, implode(', ', $methods)];
+                foreach ($permissionClasses as $class => $count) {
+                    $exposure[$class] = ($exposure[$class] ?? 0) + $count;
+                }
             }
         }
 
         sort($tuples, SORT_REGULAR);
 
-        return $tuples;
+        return [$tuples, $exposure];
     }
 
     /** @return array{namespaces: array<mixed>, routes: array<mixed>}|null */
@@ -164,7 +176,10 @@ final class RestSurfaceInventory
                         }
                     }
 
-                    $routes[$namespace][$route][] = ['methods' => $handler['methods']];
+                    $routes[$namespace][$route][] = [
+                        'methods' => $handler['methods'],
+                        'permission_callback' => $handler['permission_callback'] ?? null,
+                    ];
                 }
             }
         }
