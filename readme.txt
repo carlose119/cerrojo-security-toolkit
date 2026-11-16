@@ -3,7 +3,7 @@ Contributors: carlose119
 Tags: security, hardening, login security, security headers, rest api
 Requires at least: 6.8
 Tested up to: 7.1.4
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 Requires PHP: 8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -67,6 +67,11 @@ A changed raw string is observed even when redaction or truncation makes the dis
 No. This version has no uninstall cleanup routine, so plugin-owned settings remain unless they are changed or removed separately.
 
 == Changelog ==
+
+= 0.3.1 =
+
+* Raised the published compatibility declaration to WordPress 7.1.4 and pinned the hosted integration fixture to that release.
+* Verified integration smoke on WordPress 7.1.4 with PHP 8.4.
 
 = 0.3.0 =
 
