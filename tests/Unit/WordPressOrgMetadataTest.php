@@ -35,7 +35,7 @@ final class WordPressOrgMetadataTest extends TestCase
         self::assertStringStartsWith('=== Cerrojo Security Toolkit ===', $readme);
         self::assertSame('carlose119', $headers['Contributors'] ?? null);
         self::assertSame('6.8', $headers['Requires at least'] ?? null);
-        self::assertSame('7.1.2', $headers['Tested up to'] ?? null);
+        self::assertSame('7.1.4', $headers['Tested up to'] ?? null);
         self::assertSame(self::EXPECTED_VERSION, $headers['Stable tag'] ?? null);
         self::assertSame('8.1', $headers['Requires PHP'] ?? null);
         self::assertSame('GPLv2 or later', $headers['License'] ?? null);

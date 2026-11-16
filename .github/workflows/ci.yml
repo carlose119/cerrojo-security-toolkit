@@ -120,7 +120,7 @@ jobs:
       - name: Run pinned WooCommerce integration
         shell: bash
         env:
-          WP_SHA256: 8fc96c59a78b7219e4a130222b7fadb51b03e503e8b0123beaa7e28961c21ce2
+          WP_SHA256: a147146c159362778ecbbbfb07bb20ddf4e85b130f971c824e656a8f938c5f87
           WC_SHA256: 88837ea0504544fdb835078d39c68c6c4abde00cdb4af8f67027255ee8ae494c
         run: |
           set -euo pipefail
@@ -130,7 +130,7 @@ jobs:
           mkdir -p "$fixture/downloads" "$fixture/site"
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output "$fixture/downloads/wordpress.zip" \
-            https://downloads.wordpress.org/release/wordpress-7.1.2.zip
+            https://downloads.wordpress.org/release/wordpress-7.1.4.zip
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output "$fixture/downloads/woocommerce.zip" \
             https://github.com/woocommerce/woocommerce/releases/download/11.0.1/woocommerce.zip
@@ -163,7 +163,7 @@ jobs:
           php tests/Integration/FixtureLifecycle.php activate "$fixture/site/wordpress"
           smoke_result="$(php tests/Integration/WordPressSmoke.php "$fixture/site/wordpress")"
           printf '%s\n' "$smoke_result"
-          grep -Fxq 'BASTION_WP_712_SMOKE_OK: activation, dashboard and representative controls passed' <<< "$smoke_result"
+          grep -Fxq 'BASTION_WP_714_SMOKE_OK: activation, dashboard and representative controls passed' <<< "$smoke_result"
           result="$(php tests/Integration/WooCommerceRestInventory.php "$fixture/site/wordpress")"
           printf '%s\n' "$result"
           grep -Fxq 'BASTION_WC_COMPAT_OK: inventory assertions passed' <<< "$result"

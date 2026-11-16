@@ -258,7 +258,7 @@ Cerrojo includes no public mutation endpoint, user-authored regex/wildcard/names
 
 ## Compatibility target
 
-- WordPress 6.8 through 7.1
+- WordPress 6.8 through 7.1.4
 - PHP 8.1 through 8.4 where those WordPress versions and upstream dependencies support it
 
 Compatibility is a validation target, not a claim that unsupported upstream combinations are safe.
@@ -272,7 +272,7 @@ composer install
 composer check
 ```
 
-CI runs the same validation, full PHPUnit suite, dependency audit, and PHP syntax checks on Ubuntu with PHP 8.1, 8.2, 8.3, and 8.4. A separate hosted job installs WordPress, verifies its schema, activates both plugins, and has passed the non-interference assertions for PHP 8.4, WordPress 7.1.2, WooCommerce 11.0.1, and MariaDB 11.4.7. This is evidence for that exact tuple, not a general WooCommerce compatibility claim.
+CI runs the same validation, full PHPUnit suite, dependency audit, and PHP syntax checks on Ubuntu with PHP 8.1, 8.2, 8.3, and 8.4. A separate hosted job installs WordPress, verifies its schema, activates both plugins, and has passed the non-interference assertions for PHP 8.4, WordPress 7.1.4, WooCommerce 11.0.1, and MariaDB 11.4.7. This is evidence for that exact tuple, not a general WooCommerce compatibility claim.
 
 ## Build
 
