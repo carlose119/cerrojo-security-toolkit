@@ -25,6 +25,26 @@ final class RestExposureClassification
     /** Any other registered value: a callback is registered, its authorization behavior is unknown. */
     public const OPAQUE = 'opaque';
 
+    /**
+     * Exposure ordering: absent is the most exposed structural class and opaque
+     * the least. Snapshot deduplication and delta rendering both rank by it, so a
+     * duplicate key that is anonymously callable is never masked by a stricter one.
+     *
+     * @var array<string, int>
+     */
+    public const SEVERITY = [
+        self::ABSENT => 3,
+        self::PUBLIC => 2,
+        self::DENIED => 1,
+        self::OPAQUE => 0,
+    ];
+
+    /** Unknown class strings rank below every known class and can never outrank one. */
+    public static function severity(string $class): int
+    {
+        return self::SEVERITY[$class] ?? -1;
+    }
+
     /** @return self::ABSENT|self::PUBLIC|self::DENIED|self::OPAQUE */
     public static function classify(mixed $permissionCallback): string
     {
