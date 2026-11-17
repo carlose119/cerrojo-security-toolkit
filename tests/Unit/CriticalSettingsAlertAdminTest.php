@@ -33,6 +33,9 @@ namespace {
     if (! function_exists('sanitize_text_field')) {
         function sanitize_text_field(string $value): string { return trim(strip_tags($value)); }
     }
+    if (! function_exists('date_i18n')) {
+        function date_i18n(string $format, ?int $timestamp = null): string { return (new DateTimeImmutable('@' . ($timestamp ?? 0)))->setTimezone(new DateTimeZone('UTC'))->format($format); }
+    }
 }
 
 namespace BastionSecurityWP\Tests\Unit {
@@ -181,23 +184,106 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringNotContainsString('private-error-details', (string) ob_get_clean());
         }
 
+        public function testLastSendOutcomeLineRendersEachResultClassWithItsRecordedDate(): void
+        {
+            $at = 1704448800; // 2024-01-05 10:00:00 UTC
+            $date = '2024-01-05 10:00:00 UTC';
+            $cases = [
+                [
+                    ['schema_version' => 1, 'result' => 'accepted', 'at' => $at, 'accepted' => 1, 'refused' => 0, 'errored' => 0],
+                    ['one@example.test'],
+                    "Most recent alert attempt: the mail transport accepted the message (recorded $date). This is not proof that the message reached its destination.",
+                ],
+                [
+                    ['schema_version' => 1, 'result' => 'refused', 'at' => $at, 'accepted' => 0, 'refused' => 1, 'errored' => 0],
+                    ['one@example.test'],
+                    "Most recent alert attempt: the mail transport did not accept the message (recorded $date). Check the site's mail configuration.",
+                ],
+                [
+                    ['schema_version' => 1, 'result' => 'errored', 'at' => $at, 'accepted' => 0, 'refused' => 0, 'errored' => 1],
+                    ['one@example.test'],
+                    "Most recent alert attempt: the mail transport raised an error (recorded $date).",
+                ],
+                [
+                    ['schema_version' => 1, 'result' => 'mixed', 'at' => $at, 'accepted' => 1, 'refused' => 1, 'errored' => 0],
+                    ['one@example.test', 'two@example.test'],
+                    "Most recent alert attempt: the cycle had mixed outcomes (recorded $date): 1 accepted, 1 refused, 0 errored.",
+                ],
+            ];
+            foreach ($cases as [$record, $recipients, $expected]) {
+                $harness = $this->admin(['schema_version' => 1, 'enabled' => true, 'recipients' => $recipients], result: $record);
+                ob_start();
+                $harness['admin']->renderToolSection();
+                $html = (string) ob_get_clean();
+
+                self::assertStringContainsString($expected, html_entity_decode($html), $expected);
+                self::assertStringContainsString($date, $html);
+            }
+        }
+
+        public function testMissingOrUnreadableOutcomeRecordRendersTheNoAttemptLineWithoutInjectableMarkup(): void
+        {
+            $hostileRecords = [
+                null,
+                [],
+                ['schema_version' => 1, 'result' => '<script>alert(1)</script>', 'at' => 1704448800, 'accepted' => 1, 'refused' => 0, 'errored' => 0],
+                ['schema_version' => 1, 'result' => 'accepted', 'at' => '<img src=x onerror=alert(1)>', 'accepted' => 1, 'refused' => 0, 'errored' => 0],
+            ];
+            foreach ($hostileRecords as $result) {
+                $harness = $this->admin(['schema_version' => 1, 'enabled' => true, 'recipients' => ['one@example.test']], result: $result);
+                ob_start();
+                $harness['admin']->renderToolSection();
+                $html = (string) ob_get_clean();
+
+                self::assertStringContainsString('Most recent alert attempt: none has been observed yet.', $html, var_export($result, true));
+                self::assertStringNotContainsString('<script', $html);
+                self::assertStringNotContainsString('<img', $html);
+            }
+        }
+
+        public function testRenderingTheOutcomeLinePerformsNoWriteNoOptionUpdateAndNoMessageDispatch(): void
+        {
+            $record = ['schema_version' => 1, 'result' => 'accepted', 'at' => 1704448800, 'accepted' => 1, 'refused' => 0, 'errored' => 0];
+            $harness = $this->admin(['schema_version' => 1, 'enabled' => true, 'recipients' => ['one@example.test']], result: $record);
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $html = (string) ob_get_clean();
+
+            self::assertStringContainsString('the mail transport accepted the message', $html);
+            self::assertSame([], $harness['mailCalls']);
+            self::assertSame([], $harness['resultWrites']);
+            self::assertSame(['schema_version' => 1, 'enabled' => true, 'recipients' => ['one@example.test']], $harness['option']);
+            self::assertSame($record, $harness['resultOption']);
+        }
+
         /** @return array<string, mixed> */
         private function &admin(
             ?array $option = null,
             string $method = 'POST',
             bool $authorized = true,
             bool $nonceValid = true,
+            ?array $result = null,
         ): array {
             $state = [
                 'option' => $option ?? ['enabled' => false, 'recipients' => []],
                 'redirects' => [],
                 'nonceActions' => [],
                 'terminations' => 0,
+                'resultOption' => $result,
+                'mailCalls' => [],
+                'resultWrites' => [],
             ];
             $policy = new CriticalSettingsAlertPolicy(
                 static function () use (&$state): mixed { return $state['option']; },
                 static function (array $value) use (&$state): bool { $state['option'] = $value; return true; },
                 static fn (string $email): bool => filter_var($email, FILTER_VALIDATE_EMAIL) !== false,
+                static function (string $to, string $subject, string $message, array $headers = []) use (&$state): bool { $state['mailCalls'][] = $to; return true; },
+                null,
+                null,
+                null,
+                null,
+                static function () use (&$state): mixed { return $state['resultOption']; },
+                static function (array $record) use (&$state): bool { $state['resultWrites'][] = $record; return true; },
             );
             $admin = new CriticalSettingsAlertAdmin(
                 $policy,

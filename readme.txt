@@ -60,7 +60,7 @@ URL Change Alerts are independently opt-in under Tools > Cerrojo Security Toolki
 
 The tool observes only successful update_option_home and update_option_siteurl hooks for the existing home and siteurl settings in the current local-blog context. They are separate settings, so each successful update is a separate event. It does not observe option additions, deletions, network options, direct SQL or file changes, or scheduled scans, and it does not switch sites or fan out on multisite.
 
-A changed raw string is observed even when redaction or truncation makes the displayed references identical. Displayed values remove user information, query strings, and fragments; invalid values are Unavailable. Paths are retained when available and may be sensitive. Cerrojo makes one plain-text wp_mail attempt per recipient; an attempt is not delivery. Mail failures do not block a WordPress update or trigger automatic rollback.
+A changed raw string is observed even when redaction or truncation makes the displayed references identical. Displayed values remove user information, query strings, and fragments; invalid values are Unavailable. Paths are retained when available and may be sensitive. Cerrojo makes one plain-text wp_mail attempt per recipient; an attempt is not delivery. Cerrojo keeps and shows only the observed result of the most recent attempt, with its recorded date, and overwrites it on the next attempt; there is no attempt history and no attempt counter. Mail failures do not block a WordPress update or trigger automatic rollback.
 
 = Does uninstalling remove saved data? =
 

@@ -114,8 +114,28 @@ final class CriticalSettingsAlertAdmin
         echo '<textarea id="bastion-critical-settings-alert-recipients" name="recipients" rows="5" class="large-text" aria-describedby="bastion-critical-settings-alert-recipients-help">' . \esc_textarea($recipientText) . '</textarea>';
         echo '<p id="bastion-critical-settings-alert-recipients-help" class="description">' . \esc_html__('Enter up to 50 recipients as email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient.', 'cerrojo-security-toolkit') . '</p>';
         echo '<p>' . \esc_html__('Disabling preserves the configured recipient list for a later re-enable.', 'cerrojo-security-toolkit') . '</p>';
+        $this->renderSendOutcomeLine();
         \submit_button(\esc_html__('Save URL Change Alert settings', 'cerrojo-security-toolkit'));
         echo '</fieldset></form></section>';
+    }
+
+    // Informational and read-only: reading the most recent outcome must never trigger a message.
+    private function renderSendOutcomeLine(): void
+    {
+        $outcome = $this->policy->lastSendOutcome();
+        if ($outcome === null) {
+            echo '<p>' . \esc_html__('Most recent alert attempt: none has been observed yet.', 'cerrojo-security-toolkit') . '</p>';
+            return;
+        }
+
+        $date = \date_i18n('Y-m-d H:i:s T', $outcome['at']);
+        $text = match ($outcome['result']) {
+            'accepted' => \sprintf(\__('Most recent alert attempt: the mail transport accepted the message (recorded %s). This is not proof that the message reached its destination.', 'cerrojo-security-toolkit'), $date),
+            'refused' => \sprintf(\__("Most recent alert attempt: the mail transport did not accept the message (recorded %s). Check the site's mail configuration.", 'cerrojo-security-toolkit'), $date),
+            'errored' => \sprintf(\__('Most recent alert attempt: the mail transport raised an error (recorded %s).', 'cerrojo-security-toolkit'), $date),
+            default => \sprintf(\__('Most recent alert attempt: the cycle had mixed outcomes (recorded %s): %d accepted, %d refused, %d errored.', 'cerrojo-security-toolkit'), $date, $outcome['accepted'], $outcome['refused'], $outcome['errored']),
+        };
+        echo '<p>' . \esc_html($text) . '</p>';
     }
 
     private function renderNotice(string $notice): void
