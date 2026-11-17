@@ -17,7 +17,7 @@ Cerrojo Security Toolkit adds focused security diagnostics and reversible, opt-i
 Current tools include:
 
 * Security posture diagnostics with links to native WordPress Site Health.
-* A file editor control that stores a plugin preference without editing wp-config.php.
+* A WordPress file-editor lock that defines DISALLOW_FILE_EDIT at runtime on single-site installs while the plugin is active, without editing wp-config.php or any other file.
 * Best-effort login protection with temporary, progressive throttling.
 * XML-RPC pingback protection that removes native inbound pingback methods and the WordPress-filtered X-Pingback header.
 * Staged HTTP security header policies with baseline, optional groups, compatibility warnings, and rollback controls.
