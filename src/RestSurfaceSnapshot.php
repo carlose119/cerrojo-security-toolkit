@@ -191,7 +191,7 @@ final class RestSurfaceSnapshot
      * "METHOD route" key per handled method, ignore non-int handler-list
      * keys, non-array handlers, and malformed methods without throwing, and
      * deduplicate repeated keys by keeping the most exposed class (absent >
-     * public > denied > opaque), so a duplicate key that is anonymously
+     * public > opaque > denied), so a duplicate key that is anonymously
      * callable is never masked by a stricter duplicate.
      *
      * @param array<mixed> $endpoints

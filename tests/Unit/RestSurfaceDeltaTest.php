@@ -115,9 +115,9 @@ final class RestSurfaceDeltaTest extends TestCase
     {
         self::assertSame(3, RestExposureClassification::severity(RestExposureClassification::ABSENT));
         self::assertSame(2, RestExposureClassification::severity(RestExposureClassification::PUBLIC));
-        self::assertSame(1, RestExposureClassification::severity(RestExposureClassification::DENIED));
-        self::assertSame(0, RestExposureClassification::severity(RestExposureClassification::OPAQUE));
-        self::assertLessThan(RestExposureClassification::severity(RestExposureClassification::OPAQUE), RestExposureClassification::severity('nonsense'));
+        self::assertSame(1, RestExposureClassification::severity(RestExposureClassification::OPAQUE));
+        self::assertSame(0, RestExposureClassification::severity(RestExposureClassification::DENIED));
+        self::assertLessThan(RestExposureClassification::severity(RestExposureClassification::DENIED), RestExposureClassification::severity('nonsense'));
     }
 
     public function testSeverityRisesForEveryTransitionIntoAMoreExposedClass(): void
@@ -132,7 +132,7 @@ final class RestSurfaceDeltaTest extends TestCase
             [RestExposureClassification::DENIED, RestExposureClassification::ABSENT],
             [RestExposureClassification::OPAQUE, RestExposureClassification::PUBLIC],
             [RestExposureClassification::DENIED, RestExposureClassification::PUBLIC],
-            [RestExposureClassification::OPAQUE, RestExposureClassification::DENIED],
+            [RestExposureClassification::DENIED, RestExposureClassification::OPAQUE],
         ] as [$from, $to]) {
             self::assertGreaterThan(
                 RestExposureClassification::severity($from),
@@ -145,7 +145,7 @@ final class RestSurfaceDeltaTest extends TestCase
             [RestExposureClassification::ABSENT, RestExposureClassification::OPAQUE],
             [RestExposureClassification::ABSENT, RestExposureClassification::PUBLIC],
             [RestExposureClassification::PUBLIC, RestExposureClassification::OPAQUE],
-            [RestExposureClassification::DENIED, RestExposureClassification::OPAQUE],
+            [RestExposureClassification::OPAQUE, RestExposureClassification::DENIED],
         ] as [$from, $to]) {
             self::assertLessThan(
                 RestExposureClassification::severity($from),

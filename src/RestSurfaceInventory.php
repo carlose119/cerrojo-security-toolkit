@@ -44,7 +44,7 @@ final class RestSurfaceInventory
             return $this->result(
                 DiagnosticStatus::Good,
                 sprintf(
-                    '<p>Registered REST namespace, route pattern, and methods only. Showing %d of %d routes; %d truncated.</p><ul>%s</ul><p>Permission-callback exposure across %d registered route handlers (structural counts from registered values only; opaque callbacks were not invoked): %d with no permission callback registered, %d __return_true, %d __return_false, %d opaque (authorization unknown).</p>',
+                    '<p>Registered REST namespace, route pattern, and methods only. Showing %d of %d routes; %d truncated.</p><ul>%s</ul><p>Permission-callback exposure across %d registered route handlers (structural counts from registered values only; opaque callbacks were not invoked): %d with no effective permission check, %d __return_true, %d __return_false, %d opaque (authorization unknown).</p>',
                     count($shown),
                     count($tuples),
                     $truncated,

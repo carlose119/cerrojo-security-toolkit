@@ -169,13 +169,40 @@ final class RestSurfaceSnapshotTest extends TestCase
 
         self::assertSame([
             'map' => [
-                'DELETE /app/things' => RestExposureClassification::DENIED,
+                'DELETE /app/things' => RestExposureClassification::OPAQUE,
                 'GET /app/things' => RestExposureClassification::ABSENT,
-                'POST /app/things' => RestExposureClassification::DENIED,
+                'POST /app/things' => RestExposureClassification::OPAQUE,
             ],
             'total' => 3,
             'truncated' => false,
         ], $normalized);
+    }
+
+    public function testNormalizeDedupNeverMasksAnOpaqueHandlerWithADeniedOne(): void
+    {
+        // WordPress dispatches the first handler registered for a method, so if the
+        // opaque handler came first the route may be anonymously callable. An unknown
+        // callback must therefore never be masked by a denied duplicate.
+        $normalized = RestSurfaceSnapshot::normalize([
+            '/app/first' => [
+                ['methods' => ['GET' => true], 'permission_callback' => static fn (): bool => false],
+                ['methods' => ['GET' => true], 'permission_callback' => '__return_false'],
+            ],
+            '/app/second' => [
+                ['methods' => ['POST' => true], 'permission_callback' => '__return_false'],
+                ['methods' => ['POST' => true], 'permission_callback' => static fn (): bool => false],
+            ],
+            '/app/denied-only' => [
+                ['methods' => ['GET' => true], 'permission_callback' => '__return_false'],
+                ['methods' => ['GET' => true], 'permission_callback' => '__return_false'],
+            ],
+        ]);
+
+        self::assertNotSame(RestExposureClassification::DENIED, $normalized['map']['GET /app/first'], 'An opaque duplicate must never collapse to denied.');
+        self::assertSame(RestExposureClassification::OPAQUE, $normalized['map']['GET /app/first']);
+        self::assertNotSame(RestExposureClassification::DENIED, $normalized['map']['POST /app/second'], 'An opaque duplicate must never collapse to denied regardless of registration order.');
+        self::assertSame(RestExposureClassification::OPAQUE, $normalized['map']['POST /app/second']);
+        self::assertSame(RestExposureClassification::DENIED, $normalized['map']['GET /app/denied-only']);
     }
 
     public function testNormalizeIgnoresNonIntegerKeysNonArrayHandlersAndMalformedMethods(): void

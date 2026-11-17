@@ -249,7 +249,7 @@ final class RestSurfaceInventoryTest extends TestCase
         $serialized = serialize($result);
 
         self::assertSame('good', $result['status']);
-        self::assertStringContainsString('2 with no permission callback registered', $result['description']);
+        self::assertStringContainsString('2 with no effective permission check', $result['description']);
         self::assertStringContainsString('1 __return_true', $result['description']);
         self::assertStringContainsString('1 __return_false', $result['description']);
         self::assertStringContainsString('4 opaque', $result['description']);

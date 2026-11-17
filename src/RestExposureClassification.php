@@ -26,17 +26,20 @@ final class RestExposureClassification
     public const OPAQUE = 'opaque';
 
     /**
-     * Exposure ordering: absent is the most exposed structural class and opaque
+     * Exposure ordering: absent is the most exposed structural class and denied
      * the least. Snapshot deduplication and delta rendering both rank by it, so a
-     * duplicate key that is anonymously callable is never masked by a stricter one.
+     * duplicate key that is anonymously callable is never masked by a stricter one:
+     * denied can win a deduplication only when every handler for the key denies,
+     * because WordPress dispatches the first handler registered for the method and
+     * an unknown callback may be anonymously callable.
      *
      * @var array<string, int>
      */
     public const SEVERITY = [
         self::ABSENT => 3,
         self::PUBLIC => 2,
-        self::DENIED => 1,
-        self::OPAQUE => 0,
+        self::OPAQUE => 1,
+        self::DENIED => 0,
     ];
 
     /** Unknown class strings rank below every known class and can never outrank one. */
