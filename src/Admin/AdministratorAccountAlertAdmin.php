@@ -117,6 +117,12 @@ final class AdministratorAccountAlertAdmin
     {
         $outcome = $this->policy->lastSendOutcome();
         if ($outcome === null) {
+            if ($this->policy->hasStoredSendOutcome()) {
+                // The record exists but no longer validates against the current configuration:
+                // never claim that nothing was observed when something was recorded.
+                echo '<p>' . \esc_html__('Most recent alert attempt: a stored result exists, but it is not shown because it could not be validated against the current configuration.', 'cerrojo-security-toolkit') . '</p>';
+                return;
+            }
             echo '<p>' . \esc_html__('Most recent alert attempt: none has been observed yet.', 'cerrojo-security-toolkit') . '</p>';
             return;
         }

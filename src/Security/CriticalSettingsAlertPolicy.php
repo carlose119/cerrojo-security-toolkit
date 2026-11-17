@@ -22,6 +22,7 @@ final class CriticalSettingsAlertPolicy
     private const MAX_EMAIL_LENGTH = 254;
     private const MAX_FIELD_LENGTH = 200;
     private const RESULT_SCHEMA_VERSION = 1;
+    private const RESULT_MAX_FUTURE_SECONDS = 86400;
 
     private Closure $readOption;
     private Closure $writeOption;
@@ -214,6 +215,7 @@ final class CriticalSettingsAlertPolicy
                 || ! is_string($stored['result'])
                 || ! in_array($stored['result'], ['accepted', 'refused', 'errored', 'mixed'], true)
                 || ! is_int($stored['at'])
+                || $stored['at'] <= 0
                 || ! is_int($stored['accepted'])
                 || ! is_int($stored['refused'])
                 || ! is_int($stored['errored'])
@@ -228,9 +230,29 @@ final class CriticalSettingsAlertPolicy
                 return null;
             }
 
+            try {
+                $now = ($this->clock)();
+            } catch (Throwable) {
+                // A clock that cannot answer cannot vouch for the recorded moment; reject rather than trust.
+                return null;
+            }
+            if (! is_int($now) || $stored['at'] > $now + self::RESULT_MAX_FUTURE_SECONDS) {
+                return null;
+            }
+
             return $stored;
         } catch (Throwable) {
             return null;
+        }
+    }
+
+    // Read-only: distinguishes "nothing was ever recorded" from "a record exists but cannot be shown".
+    public function hasStoredSendOutcome(): bool
+    {
+        try {
+            return ($this->readResultOption)() !== null;
+        } catch (Throwable) {
+            return false;
         }
     }
 

@@ -14,6 +14,7 @@ final class PluginActivityAlertPolicy
     private const MAX_RECIPIENTS = 50;
     private const MAX_METADATA_LENGTH = 200;
     private const RESULT_SCHEMA_VERSION = 1;
+    private const RESULT_MAX_FUTURE_SECONDS = 86400;
 
     private Closure $readOption;
     private Closure $writeOption;
@@ -284,6 +285,7 @@ final class PluginActivityAlertPolicy
                 || ! is_string($stored['result'])
                 || ! in_array($stored['result'], ['accepted', 'refused', 'errored', 'mixed'], true)
                 || ! is_int($stored['at'])
+                || $stored['at'] <= 0
                 || ! is_int($stored['accepted'])
                 || ! is_int($stored['refused'])
                 || ! is_int($stored['errored'])
@@ -298,9 +300,29 @@ final class PluginActivityAlertPolicy
                 return null;
             }
 
+            try {
+                $now = ($this->clock)();
+            } catch (Throwable) {
+                // A clock that cannot answer cannot vouch for the recorded moment; reject rather than trust.
+                return null;
+            }
+            if (! is_int($now) || $stored['at'] > $now + self::RESULT_MAX_FUTURE_SECONDS) {
+                return null;
+            }
+
             return $stored;
         } catch (Throwable) {
             return null;
+        }
+    }
+
+    // Read-only: distinguishes "nothing was ever recorded" from "a record exists but cannot be shown".
+    public function hasStoredSendOutcome(): bool
+    {
+        try {
+            return ($this->readResultOption)() !== null;
+        } catch (Throwable) {
+            return false;
         }
     }
 

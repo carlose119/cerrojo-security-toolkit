@@ -288,6 +288,7 @@ final class CriticalSettingsAlertPolicyTest extends TestCase
         self::assertNull($disabled['record']);
         self::assertSame(0, $disabled['recordWrites']);
         self::assertNull($disabled['policy']->lastSendOutcome());
+        self::assertFalse($disabled['policy']->hasStoredSendOutcome());
 
         $unchanged = $this->policy(['schema_version' => 1, 'enabled' => true, 'recipients' => ['alerts@example.test']]);
         $unchanged['policy']->onOptionUpdated('https://same.example.test', 'https://same.example.test', 'home');
@@ -310,6 +311,9 @@ final class CriticalSettingsAlertPolicyTest extends TestCase
             ['schema_version' => 2, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 2, 'refused' => 0, 'errored' => 0],
             ['schema_version' => 1, 'result' => 'partial', 'at' => 1738500006, 'accepted' => 2, 'refused' => 0, 'errored' => 0],
             ['schema_version' => 1, 'result' => 'accepted', 'at' => '1738500006', 'accepted' => 2, 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => 0, 'accepted' => 2, 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => -100, 'accepted' => 2, 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006 + 86401, 'accepted' => 2, 'refused' => 0, 'errored' => 0],
             ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => '2', 'refused' => 0, 'errored' => 0],
             ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => -1, 'refused' => 3, 'errored' => 0],
             ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 5, 'refused' => 0, 'errored' => 0],
@@ -320,6 +324,62 @@ final class CriticalSettingsAlertPolicyTest extends TestCase
             $harness['record'] = $corrupt;
             self::assertNull($harness['policy']->lastSendOutcome());
         }
+    }
+
+    public function testStoredRecordThatNoLongerValidatesRemainsDetectableAsStored(): void
+    {
+        $harness = $this->policy(
+            ['schema_version' => 1, 'enabled' => true, 'recipients' => ['one@example.test', 'two@example.test']],
+            mailResults: [true, true],
+        );
+        $harness['policy']->onOptionUpdated('https://old.example.test', 'https://new.example.test', 'home');
+        self::assertSame(1, $harness['recordWrites']);
+
+        // A recipient edit changes the configured count, so the recorded counts no longer
+        // validate, but a cycle was genuinely observed and stored.
+        $harness['option'] = ['schema_version' => 1, 'enabled' => true, 'recipients' => ['one@example.test']];
+        self::assertNull($harness['policy']->lastSendOutcome());
+        self::assertTrue($harness['policy']->hasStoredSendOutcome());
+
+        $nothingStored = $this->policy();
+        self::assertFalse($nothingStored['policy']->hasStoredSendOutcome());
+
+        $notARecord = $this->policy(['schema_version' => 1, 'enabled' => true, 'recipients' => ['one@example.test']]);
+        $notARecord['record'] = 'not an array';
+        self::assertTrue($notARecord['policy']->hasStoredSendOutcome(), 'A stored non-record value is still something stored.');
+
+        $unreadable = new CriticalSettingsAlertPolicy(
+            static function (): never { throw new RuntimeException('private option details'); },
+            readResultOption: static function (): never { throw new RuntimeException('private option details'); },
+        );
+        self::assertFalse($unreadable->hasStoredSendOutcome());
+    }
+
+    public function testUnreadableOrNonIntegerClockRejectsTheStoredRecordWithoutThrowing(): void
+    {
+        $valid = ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 1, 'refused' => 0, 'errored' => 0];
+        foreach ([
+            'throwing clock' => static function (): never { throw new RuntimeException('private clock details'); },
+            'non-integer clock' => static fn (): string => 'not a timestamp',
+        ] as $label => $clock) {
+            $harness = $this->policy(['schema_version' => 1, 'enabled' => true, 'recipients' => ['one@example.test']], clock: $clock);
+            $harness['record'] = $valid;
+
+            self::assertNull($harness['policy']->lastSendOutcome(), $label);
+            self::assertTrue($harness['policy']->hasStoredSendOutcome(), $label);
+        }
+    }
+
+    public function testStoredTimestampAtTheSkewBoundaryIsValidButBeyondItIsRejected(): void
+    {
+        $harness = $this->policy(['schema_version' => 1, 'enabled' => true, 'recipients' => ['one@example.test']]);
+
+        $harness['record'] = ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006 + 86400, 'accepted' => 1, 'refused' => 0, 'errored' => 0];
+        self::assertSame(1738500006 + 86400, $harness['policy']->lastSendOutcome()['at']);
+
+        $harness['record'] = ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006 + 86401, 'accepted' => 1, 'refused' => 0, 'errored' => 0];
+        self::assertNull($harness['policy']->lastSendOutcome());
+        self::assertTrue($harness['policy']->hasStoredSendOutcome());
     }
 
     public function testThrowingAndRefusingRecordersNeverChangeTheCycle(): void
@@ -389,6 +449,7 @@ final class CriticalSettingsAlertPolicyTest extends TestCase
         bool $recordSucceeds = true,
         bool $recordThrows = false,
         int $clockValue = 1738500006,
+        ?callable $clock = null,
     ): array {
         $state = ['option' => $option, 'writes' => 0, 'mail' => [], 'record' => null, 'recordWrites' => 0, 'mailResults' => $mailResults];
         $policy = new CriticalSettingsAlertPolicy(
@@ -432,7 +493,7 @@ final class CriticalSettingsAlertPolicyTest extends TestCase
                 $state['record'] = $record;
                 return true;
             },
-            clock: static fn (): int => $clockValue,
+            clock: $clock ?? static fn (): int => $clockValue,
         );
         $state['policy'] = $policy;
         $result = [];

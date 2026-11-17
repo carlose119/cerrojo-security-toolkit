@@ -250,21 +250,32 @@ namespace BastionSecurityWP\Tests\Unit {
             }
         }
 
-        public function testMissingOrUnreadableOutcomeRecordRendersTheNoAttemptLineWithoutInjectableMarkup(): void
+        public function testNothingStoredOutcomeRecordRendersTheNoAttemptLineWithoutInjectableMarkup(): void
         {
-            $hostileRecords = [
-                null,
+            $harness = $this->admin(['enabled' => true, 'recipients' => ['one@example.test']], result: null);
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $html = (string) ob_get_clean();
+
+            self::assertStringContainsString('Most recent alert attempt: none has been observed yet.', $html);
+        }
+
+        public function testStoredButUnvalidatableOutcomeRecordRendersTheUnvalidatedLineWithoutInjectableMarkup(): void
+        {
+            $unvalidatableRecords = [
                 [],
                 ['schema_version' => 1, 'result' => '<script>alert(1)</script>', 'at' => 1704448800, 'accepted' => 1, 'refused' => 0, 'errored' => 0],
                 ['schema_version' => 1, 'result' => 'accepted', 'at' => '<img src=x onerror=alert(1)>', 'accepted' => 1, 'refused' => 0, 'errored' => 0],
+                ['schema_version' => 1, 'result' => 'accepted', 'at' => 1704448800, 'accepted' => 5, 'refused' => 0, 'errored' => 0],
             ];
-            foreach ($hostileRecords as $result) {
+            foreach ($unvalidatableRecords as $result) {
                 $harness = $this->admin(['enabled' => true, 'recipients' => ['one@example.test']], result: $result);
                 ob_start();
                 $harness['admin']->renderToolSection();
                 $html = (string) ob_get_clean();
 
-                self::assertStringContainsString('Most recent alert attempt: none has been observed yet.', $html, var_export($result, true));
+                self::assertStringContainsString('Most recent alert attempt: a stored result exists, but it is not shown because it could not be validated against the current configuration.', $html, var_export($result, true));
+                self::assertStringNotContainsString('none has been observed yet', $html, var_export($result, true));
                 self::assertStringNotContainsString('<script', $html);
                 self::assertStringNotContainsString('<img', $html);
             }
