@@ -100,6 +100,41 @@ final class RestSurfaceInventoryTest extends TestCase
         self::assertStringNotContainsString('/bulk/100', $description);
     }
 
+    public function testRawEndpointsReturnsTheRawRegistryForAnInitializedServerWithoutFiltersOrCallbacks(): void
+    {
+        $calls = 0;
+        $callback = static function () use (&$calls): void {
+            ++$calls;
+        };
+        $server = new \WP_REST_Server();
+        $server->registerRoute('custom/v1', '/custom/v1/item', [[
+                'methods' => ['GET' => true],
+                'callback' => $callback,
+                'permission_callback' => $callback,
+        ]]);
+        $GLOBALS['wp_rest_server'] = $server;
+        $optionsBefore = $server->get_route_options('/custom/v1/item');
+        $filtersBefore = $server->restEndpointFilterCalls;
+
+        try {
+            $raw = RestSurfaceInventory::rawEndpoints();
+        } finally {
+            unset($GLOBALS['wp_rest_server']);
+        }
+
+        self::assertIsArray($raw);
+        self::assertSame(['GET' => true], $raw['/custom/v1/item'][0]['methods'] ?? null);
+        self::assertSame($callback, $raw['/custom/v1/item'][0]['callback'] ?? null);
+        self::assertSame($filtersBefore, $server->restEndpointFilterCalls, 'rawEndpoints must not call get_routes() or apply the rest_endpoints filter.');
+        self::assertSame($optionsBefore, $server->get_route_options('/custom/v1/item'));
+        self::assertSame(0, $calls, 'rawEndpoints must never invoke a permission or endpoint callback.');
+    }
+
+    public function testRawEndpointsReturnsNullWhenTheRegistryIsNotInitialized(): void
+    {
+        self::assertNull(RestSurfaceInventory::rawEndpoints());
+    }
+
     public function testUnavailableRegistryIsNotAssessedAndCannotInitializeRest(): void
     {
         $result = (new RestSurfaceInventory())->report();

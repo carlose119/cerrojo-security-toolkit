@@ -122,8 +122,23 @@ final class RestSurfaceInventory
         return [$tuples, $exposure];
     }
 
-    /** @return array{namespaces: array<mixed>, routes: array<mixed>}|null */
-    private static function readRegistry(): ?array
+    /**
+     * Raw `$wp_rest_server->endpoints` map when an already-initialized REST
+     * server object is reflected successfully, null otherwise. Like
+     * readRegistry(), this never calls get_routes(), never applies the
+     * rest_endpoints filter, and never initializes REST.
+     *
+     * @return array<mixed>|null
+     */
+    public static function rawEndpoints(): ?array
+    {
+        $reflected = self::reflectedServer();
+
+        return $reflected === null ? null : self::readServerProperty($reflected, 'endpoints');
+    }
+
+    /** @return array{0: \ReflectionClass<\WP_REST_Server>, 1: \WP_REST_Server}|null */
+    private static function reflectedServer(): ?array
     {
         global $wp_rest_server;
 
@@ -131,20 +146,37 @@ final class RestSurfaceInventory
             return null;
         }
 
+        return [new \ReflectionClass($wp_rest_server), $wp_rest_server];
+    }
+
+    /**
+     * @param array{0: \ReflectionClass<\WP_REST_Server>, 1: \WP_REST_Server} $reflected
+     * @return array<mixed>|null
+     */
+    private static function readServerProperty(array $reflected, string $name): ?array
+    {
+        [$reflection, $server] = $reflected;
+        if (! $reflection->hasProperty($name)) {
+            return null;
+        }
+
+        $property = $reflection->getProperty($name);
+        $value = ! $property->isStatic() && $property->isProtected() ? $property->getValue($server) : null;
+
+        return is_array($value) ? $value : null;
+    }
+
+    /** @return array{namespaces: array<mixed>, routes: array<mixed>}|null */
+    private static function readRegistry(): ?array
+    {
+        $reflected = self::reflectedServer();
+        if ($reflected === null) {
+            return null;
+        }
+
         // get_routes() applies rest_endpoints filters and materializes route options; reflect only the raw registry needed here.
-        $reflection = new \ReflectionClass($wp_rest_server);
-        $read = static function (string $name) use ($reflection, $wp_rest_server): ?array {
-            if (! $reflection->hasProperty($name)) {
-                return null;
-            }
-
-            $property = $reflection->getProperty($name);
-            $value = ! $property->isStatic() && $property->isProtected() ? $property->getValue($wp_rest_server) : null;
-
-            return is_array($value) ? $value : null;
-        };
-        $namespaceMap = $read('namespaces');
-        $endpoints = $read('endpoints');
+        $namespaceMap = self::readServerProperty($reflected, 'namespaces');
+        $endpoints = self::readServerProperty($reflected, 'endpoints');
         if ($namespaceMap === null || $endpoints === null) {
             return null;
         }

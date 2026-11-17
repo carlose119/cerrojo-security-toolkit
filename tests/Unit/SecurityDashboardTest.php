@@ -126,6 +126,7 @@ namespace BastionSecurityWP\Tests\Unit {
     use BastionSecurityWP\Admin\AdministratorAccountAlertAdmin;
     use BastionSecurityWP\Admin\CriticalSettingsAlertAdmin;
     use BastionSecurityWP\Admin\RestRouteControlsAdmin;
+    use BastionSecurityWP\Admin\RestExposurePanel;
     use BastionSecurityWP\Admin\FileEditorAdmin;
     use BastionSecurityWP\Admin\LoginProtectionAdmin;
     use BastionSecurityWP\Admin\PluginActivityAlertAdmin;
@@ -141,6 +142,7 @@ namespace BastionSecurityWP\Tests\Unit {
     use BastionSecurityWP\Security\SecurityHeadersPolicy;
     use BastionSecurityWP\Security\XmlRpcPingbackPolicy;
     use BastionSecurityWP\RestRouteCatalog;
+    use BastionSecurityWP\RestSurfaceSnapshot;
     use BastionSecurityWP\SiteHealthDiagnostics;
     use PHPUnit\Framework\TestCase;
 
@@ -430,6 +432,47 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringContainsString('site-health.php', $html);
         }
 
+        public function testRestApiTabRendersTheExposurePanelAfterTheCatalogAndOnlyThere(): void
+        {
+            $store = ['value' => null, 'writes' => 0, 'deletes' => 0];
+            $endpoints = ['/wp/v2/posts' => [['methods' => ['GET' => true], 'permission_callback' => '__return_true']]];
+            $panel = new RestExposurePanel(
+                snapshot: new RestSurfaceSnapshot(
+                    readOption: static fn (): mixed => $store['value'],
+                    writeOption: static function (array $value) use (&$store): bool { ++$store['writes']; $store['value'] = $value; return true; },
+                    deleteOption: static function () use (&$store): bool { ++$store['deletes']; $store['value'] = null; return true; },
+                    clock: static fn (): int => 1_700_000_000,
+                    wordpressVersion: static fn (): mixed => '6.8.2',
+                ),
+                registry: static fn (): ?array => $endpoints,
+                currentUserCan: static fn (string $capability): bool => $capability === 'manage_options',
+                verifyNonce: static fn (): bool => true,
+                nonceField: static fn (string $action): string => '<input type="hidden" name="_wpnonce" value="nonce">',
+                adminUrl: static fn (string $path): string => 'https://example.test/wp-admin/' . $path,
+                requestMethod: static fn (): string => 'GET',
+                postField: static fn (): ?string => null,
+                escapeHtml: static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8'),
+                escapeAttr: static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8'),
+                escapeUrl: static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8'),
+                clock: static fn (): int => 1_700_000_000,
+                formatDate: static fn (int $timestamp): string => 'DATE-' . (string) $timestamp,
+                formatNumber: static fn (int $count): string => (string) $count,
+            );
+
+            $restApi = $this->renderTab('rest-api', panel: $panel);
+            self::assertStringContainsString('REST Exposure Findings', $restApi);
+            self::assertTrue(
+                strpos($restApi, 'REST Route Controls') < strpos($restApi, 'REST Exposure Findings'),
+                'The exposure section must render after the route catalog.',
+            );
+            self::assertSame(0, $store['writes'], 'Rendering the tab must not write.');
+            self::assertSame(0, $store['deletes'], 'Rendering the tab must not delete.');
+
+            foreach (['overview', 'hardening', 'headers'] as $tab) {
+                self::assertStringNotContainsString('REST Exposure Findings', $this->renderTab($tab, panel: $panel));
+            }
+        }
+
         public function testReportedRequestAndTranslationBoundariesRemainCompliant(): void
         {
             $root = dirname(__DIR__, 2);
@@ -466,11 +509,11 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringNotContainsString('<style>', $dashboard);
         }
 
-        private function renderTab(string $tab): string
+        private function renderTab(string $tab, ?RestExposurePanel $panel = null): string
         {
             $_GET['tab'] = $tab;
             ob_start();
-            $this->dashboard()->render();
+            $this->dashboard(restExposurePanel: $panel)->render();
 
             return (string) ob_get_clean();
         }
@@ -483,6 +526,7 @@ namespace BastionSecurityWP\Tests\Unit {
             bool $multisite = false,
             bool $authorized = true,
             ?array &$observations = null,
+            ?RestExposurePanel $restExposurePanel = null,
         ): SecurityDashboard {
             $values = [
                 'wp_debug' => false,
@@ -640,6 +684,7 @@ namespace BastionSecurityWP\Tests\Unit {
                 static fn (string $path): string => 'https://example.test/wp-admin/' . $path,
                 $sanitize ?? static fn (string $html): string => strip_tags($html, '<p><strong><a>'),
                 criticalSettingsAlertAdmin: $criticalSettingsAlertAdmin,
+                restExposurePanel: $restExposurePanel,
             );
         }
     }

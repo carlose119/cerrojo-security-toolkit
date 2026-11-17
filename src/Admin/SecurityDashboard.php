@@ -31,6 +31,7 @@ final class SecurityDashboard
         ?callable $adminUrl = null,
         ?callable $sanitizeHtml = null,
         private readonly ?CriticalSettingsAlertAdmin $criticalSettingsAlertAdmin = null,
+        private readonly ?RestExposurePanel $restExposurePanel = null,
     ) {
         $this->currentUserCan = Closure::fromCallable($currentUserCan ?? static fn (string $capability): bool => \current_user_can($capability));
         $this->adminUrl = Closure::fromCallable($adminUrl ?? static fn (string $path): string => \admin_url($path));
@@ -96,6 +97,7 @@ final class SecurityDashboard
         } elseif ($tab === 'rest-api') {
             echo '<p class="bastion-tab-introduction">' . \esc_html__('Review the active REST route-template catalog and choose method-level blocks.', 'cerrojo-security-toolkit') . '</p>';
             $this->restRouteControlsAdmin->renderCatalog($restRouteControlsNotice);
+            $this->restExposurePanel?->renderToolSection();
         } else {
             $this->renderOverview();
         }
