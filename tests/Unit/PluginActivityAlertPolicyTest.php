@@ -195,6 +195,140 @@ final class PluginActivityAlertPolicyTest extends TestCase
         self::assertTrue(true);
     }
 
+    public function testMixedCycleRecordsOneExactResultWithCountsPerClass(): void
+    {
+        $harness = $this->policy(
+            ['enabled' => true, 'recipients' => ['one@example.test', 'two@example.test', 'three@example.test']],
+            mailResults: [true, false, 'throw'],
+        );
+
+        $harness['policy']->handleActivatedPlugin('sample/sample.php', false);
+
+        $expected = ['schema_version' => 1, 'result' => 'mixed', 'at' => 1738500006, 'accepted' => 1, 'refused' => 1, 'errored' => 1];
+        self::assertCount(3, $harness['mail']);
+        self::assertSame(1, $harness['recordWrites']);
+        self::assertSame($expected, $harness['record']);
+        self::assertSame($expected, $harness['policy']->lastSendOutcome());
+    }
+
+    public function testRefusedCycleStoresTheRefusedClassWithExactCounts(): void
+    {
+        $harness = $this->policy(
+            ['enabled' => true, 'recipients' => ['one@example.test', 'two@example.test']],
+            mailResults: [false, false],
+        );
+
+        $harness['policy']->handleActivatedPlugin('sample/sample.php', false);
+
+        self::assertSame(['schema_version' => 1, 'result' => 'refused', 'at' => 1738500006, 'accepted' => 0, 'refused' => 2, 'errored' => 0], $harness['policy']->lastSendOutcome());
+    }
+
+    public function testThrownObservationsStoreTheErrorClassWithoutStoppingLaterRecipients(): void
+    {
+        $harness = $this->policy(
+            ['enabled' => true, 'recipients' => ['one@example.test', 'two@example.test']],
+            mailResults: ['throw', 'throw'],
+        );
+
+        $harness['policy']->handleActivatedPlugin('sample/sample.php', false);
+
+        self::assertCount(2, $harness['mail']);
+        self::assertSame('two@example.test', $harness['mail'][1][0]);
+        self::assertSame(['schema_version' => 1, 'result' => 'errored', 'at' => 1738500006, 'accepted' => 0, 'refused' => 0, 'errored' => 2], $harness['policy']->lastSendOutcome());
+    }
+
+    public function testEachCycleOverwritesTheRecordAndCountsNeverAccumulate(): void
+    {
+        $harness = $this->policy(
+            ['enabled' => true, 'recipients' => ['one@example.test', 'two@example.test']],
+            mailResults: [true, true, false, false],
+        );
+
+        $harness['policy']->handleActivatedPlugin('sample/sample.php', false);
+        $harness['policy']->handleActivatedPlugin('sample/sample.php', false);
+
+        self::assertSame(2, $harness['recordWrites']);
+        self::assertSame(['schema_version' => 1, 'result' => 'refused', 'at' => 1738500006, 'accepted' => 0, 'refused' => 2, 'errored' => 0], $harness['record']);
+    }
+
+    public function testNoObservationAttemptStoresNothingAtAll(): void
+    {
+        $disabled = $this->policy();
+        $disabled['policy']->handleActivatedPlugin('sample/sample.php', false);
+        self::assertSame([], $disabled['mail']);
+        self::assertNull($disabled['record']);
+        self::assertSame(0, $disabled['recordWrites']);
+        self::assertNull($disabled['policy']->lastSendOutcome());
+
+        $unmatched = $this->policy(['enabled' => true, 'recipients' => ['alerts@example.test']]);
+        $unmatched['policy']->handleUpgraderProcessComplete(null, ['type' => 'plugin', 'action' => 'update', 'plugin' => 'sample/sample.php']);
+        self::assertSame([], $unmatched['mail']);
+        self::assertNull($unmatched['record']);
+        self::assertSame(0, $unmatched['recordWrites']);
+    }
+
+    public function testMalformedStoredResultRecordsAlwaysReadAsNull(): void
+    {
+        $harness = $this->policy(['enabled' => true, 'recipients' => ['one@example.test', 'two@example.test']]);
+        $valid = ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 2, 'refused' => 0, 'errored' => 0];
+        $harness['record'] = $valid;
+        self::assertSame($valid, $harness['policy']->lastSendOutcome());
+
+        foreach ([
+            'not an array',
+            5,
+            null,
+            ['schema_version' => 2, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 2, 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'partial', 'at' => 1738500006, 'accepted' => 2, 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => '1738500006', 'accepted' => 2, 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => '2', 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => -1, 'refused' => 3, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 5, 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 0, 'refused' => 0, 'errored' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 2, 'refused' => 0],
+            ['schema_version' => 1, 'result' => 'accepted', 'at' => 1738500006, 'accepted' => 2, 'refused' => 0, 'errored' => 0, 'extra' => 1],
+        ] as $corrupt) {
+            $harness['record'] = $corrupt;
+            self::assertNull($harness['policy']->lastSendOutcome());
+        }
+    }
+
+    public function testThrowingAndRefusingRecordersNeverChangeTheCycle(): void
+    {
+        $throwing = $this->policy(
+            ['enabled' => true, 'recipients' => ['one@example.test', 'two@example.test']],
+            mailResults: [true, false],
+            recordThrows: true,
+        );
+        $throwing['policy']->handleActivatedPlugin('sample/sample.php', false);
+        self::assertCount(2, $throwing['mail']);
+        self::assertSame(1, $throwing['recordWrites']);
+        self::assertNull($throwing['record']);
+        self::assertNull($throwing['policy']->lastSendOutcome());
+
+        $refusing = $this->policy(
+            ['enabled' => true, 'recipients' => ['one@example.test', 'two@example.test']],
+            mailResults: [true, true],
+            recordSucceeds: false,
+        );
+        $refusing['policy']->handleActivatedPlugin('sample/sample.php', false);
+        self::assertCount(2, $refusing['mail']);
+        self::assertSame(1, $refusing['recordWrites']);
+        self::assertNull($refusing['record']);
+    }
+
+    public function testNonBooleanSenderOutcomeIsNeverTreatedAsAccepted(): void
+    {
+        $harness = $this->policy(
+            ['enabled' => true, 'recipients' => ['alerts@example.test']],
+            mailResults: [1],
+        );
+
+        $harness['policy']->handleActivatedPlugin('sample/sample.php', false);
+
+        self::assertSame(['schema_version' => 1, 'result' => 'refused', 'at' => 1738500006, 'accepted' => 0, 'refused' => 1, 'errored' => 0], $harness['record']);
+    }
+
     /** @return array<string, mixed> */
     private function &policy(
         mixed $option = ['enabled' => false, 'recipients' => []],
@@ -202,11 +336,18 @@ final class PluginActivityAlertPolicyTest extends TestCase
         ?array $plugins = null,
         bool $throwOnFirstMail = false,
         bool $inventoryUnavailable = false,
+        ?array $mailResults = null,
+        bool $recordSucceeds = true,
+        bool $recordThrows = false,
+        int $clockValue = 1738500006,
     ): array {
         $state = [
             'option' => $option,
             'writes' => 0,
             'mail' => [],
+            'record' => null,
+            'recordWrites' => 0,
+            'mailResults' => $mailResults,
         ];
         $inventory = $inventoryUnavailable ? null : ($plugins ?? [
             'sample/sample.php' => ['Name' => 'Sample Plugin', 'Version' => '1.2.3'],
@@ -223,16 +364,33 @@ final class PluginActivityAlertPolicyTest extends TestCase
             },
             static fn (string $email): bool => filter_var($email, FILTER_VALIDATE_EMAIL) !== false,
             static fn (): ?array => $inventory,
-            static function (string $to, string $subject, string $message, array $headers = []) use (&$state, $throwOnFirstMail): bool {
+            static function (string $to, string $subject, string $message, array $headers = []) use (&$state, $throwOnFirstMail) {
                 $state['mail'][] = [$to, $subject, $message, $headers];
                 if ($throwOnFirstMail && count($state['mail']) === 1) {
                     throw new RuntimeException('transport details');
                 }
-                return true;
+                $outcome = $state['mailResults'] === null ? true : (array_shift($state['mailResults']) ?? true);
+                if ($outcome === 'throw') {
+                    throw new RuntimeException('transport details');
+                }
+                return $outcome;
             },
             static fn (): string => 'Example Site',
             static fn (): string => 'https://example.test',
             static fn (): string => '2025-02-03 04:05:06 UTC',
+            readResultOption: static function () use (&$state): mixed { return $state['record']; },
+            recordResult: static function (array $record) use (&$state, $recordSucceeds, $recordThrows): bool {
+                $state['recordWrites']++;
+                if ($recordThrows) {
+                    throw new RuntimeException('private recorder details');
+                }
+                if (! $recordSucceeds) {
+                    return false;
+                }
+                $state['record'] = $record;
+                return true;
+            },
+            clock: static fn (): int => $clockValue,
         );
         $state['policy'] = $policy;
         $result = [];

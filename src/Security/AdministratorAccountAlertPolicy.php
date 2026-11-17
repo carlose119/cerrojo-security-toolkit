@@ -10,11 +10,16 @@ use Throwable;
 final class AdministratorAccountAlertPolicy
 {
     public const OPTION_NAME = 'bastion_security_wp_administrator_account_alerts';
+    public const RESULT_OPTION_NAME = 'bastion_security_wp_administrator_account_alert_result';
     private const MAX_RECIPIENTS = 50;
     private const MAX_FIELD_LENGTH = 200;
+    private const RESULT_SCHEMA_VERSION = 1;
 
     private Closure $readOption;
     private Closure $writeOption;
+    private Closure $readResultOption;
+    private Closure $recordResult;
+    private Closure $clock;
     private Closure $validateEmail;
     private Closure $getUser;
     private Closure $getCurrentUser;
@@ -33,6 +38,9 @@ final class AdministratorAccountAlertPolicy
         ?callable $siteName = null,
         ?callable $siteUrl = null,
         ?callable $timestamp = null,
+        ?callable $readResultOption = null,
+        ?callable $recordResult = null,
+        ?callable $clock = null,
     ) {
         $this->readOption = Closure::fromCallable($readOption ?? static fn (): mixed => \get_option(self::OPTION_NAME, null));
         $this->writeOption = Closure::fromCallable($writeOption ?? static fn (array $value): bool => \update_option(self::OPTION_NAME, $value));
@@ -43,6 +51,9 @@ final class AdministratorAccountAlertPolicy
         $this->siteName = Closure::fromCallable($siteName ?? static fn (): string => (string) \get_bloginfo('name'));
         $this->siteUrl = Closure::fromCallable($siteUrl ?? static fn (): string => (string) \home_url('/'));
         $this->timestamp = Closure::fromCallable($timestamp ?? static fn (): string => (string) \date_i18n('Y-m-d H:i:s T'));
+        $this->readResultOption = Closure::fromCallable($readResultOption ?? static fn (): mixed => \get_option(self::RESULT_OPTION_NAME, null));
+        $this->recordResult = Closure::fromCallable($recordResult ?? static fn (array $record): bool => \update_option(self::RESULT_OPTION_NAME, $record));
+        $this->clock = Closure::fromCallable($clock ?? static fn (): int => \time());
     }
 
     /** @return array{enabled: bool, recipients: list<string>} */
@@ -182,12 +193,94 @@ final class AdministratorAccountAlertPolicy
 
         $subject = '[' . $siteName . '] ' . $event;
         $message = implode("\n", $lines) . "\n";
+        $accepted = 0;
+        $refused = 0;
+        $errored = 0;
+        $attempted = 0;
         foreach ($configuration['recipients'] as $recipient) {
+            $attempted++;
             try {
-                ($this->mail)($recipient, $subject, $message, []);
+                $outcome = ($this->mail)($recipient, $subject, $message, []);
+                if ($outcome === true) {
+                    $accepted++;
+                } else {
+                    $refused++;
+                }
             } catch (Throwable) {
+                $errored++;
                 continue;
             }
+        }
+
+        if ($attempted > 0) {
+            $this->recordCycleOutcome($accepted, $refused, $errored);
+        }
+    }
+
+    private function recordCycleOutcome(int $accepted, int $refused, int $errored): void
+    {
+        if ($accepted > 0 && $refused === 0 && $errored === 0) {
+            $class = 'accepted';
+        } elseif ($refused > 0 && $accepted === 0 && $errored === 0) {
+            $class = 'refused';
+        } elseif ($errored > 0 && $accepted === 0 && $refused === 0) {
+            $class = 'errored';
+        } else {
+            $class = 'mixed';
+        }
+
+        try {
+            $at = ($this->clock)();
+        } catch (Throwable) {
+            $at = null;
+        }
+        if (! is_int($at)) {
+            $at = \time();
+        }
+
+        // One record per cycle, overwritten every time: what the transport answered, nothing more.
+        try {
+            ($this->recordResult)([
+                'schema_version' => self::RESULT_SCHEMA_VERSION,
+                'result' => $class,
+                'at' => $at,
+                'accepted' => $accepted,
+                'refused' => $refused,
+                'errored' => $errored,
+            ]);
+        } catch (Throwable) {
+            // A failing recorder must never interrupt or change the notification cycle.
+        }
+    }
+
+    /** @return array{schema_version: int, result: string, at: int, accepted: int, refused: int, errored: int}|null */
+    public function lastSendOutcome(): ?array
+    {
+        try {
+            $stored = ($this->readResultOption)();
+            if (! is_array($stored)
+                || array_keys($stored) !== ['schema_version', 'result', 'at', 'accepted', 'refused', 'errored']
+                || $stored['schema_version'] !== self::RESULT_SCHEMA_VERSION
+                || ! is_string($stored['result'])
+                || ! in_array($stored['result'], ['accepted', 'refused', 'errored', 'mixed'], true)
+                || ! is_int($stored['at'])
+                || ! is_int($stored['accepted'])
+                || ! is_int($stored['refused'])
+                || ! is_int($stored['errored'])
+                || $stored['accepted'] < 0
+                || $stored['refused'] < 0
+                || $stored['errored'] < 0) {
+                return null;
+            }
+
+            $classSum = $stored['accepted'] + $stored['refused'] + $stored['errored'];
+            if ($classSum < 1 || $classSum !== count($this->diagnosticState()['recipients'])) {
+                return null;
+            }
+
+            return $stored;
+        } catch (Throwable) {
+            return null;
         }
     }
 
