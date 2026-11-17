@@ -3,7 +3,7 @@ Contributors: carlose119
 Tags: security, hardening, login security, security headers, rest api
 Requires at least: 6.8
 Tested up to: 7.1.4
-Stable tag: 0.3.1
+Stable tag: 0.4.0
 Requires PHP: 8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -25,6 +25,7 @@ Current tools include:
 * Email alerts for supported administrator account lifecycle events.
 * URL Change Alerts for supported successful local WordPress Address and Site Address updates.
 * Selective REST API blocking by HTTP method and registered route template. Matching rules apply to all callers, including administrators and authenticated integrations.
+* Structural REST exposure findings: each registered route handler is classified by its registered permission callback, including the routes with no effective check, plus a baseline diff of routes added, removed, or changed in exposure class since the baseline was captured. Cerrojo never invokes a permission callback to classify it.
 
 Controls are designed to be reviewed, enabled, verified, and reversed individually. Coverage depends on the WordPress hooks and serving paths described in each tool. Login throttling is best-effort, email delivery depends on the site's mail transport, and headers must be verified at every cache, proxy, CDN, and origin edge.
 
@@ -67,6 +68,13 @@ A changed raw string is observed even when redaction or truncation makes the dis
 No. This version has no uninstall cleanup routine, so plugin-owned settings remain unless they are changed or removed separately.
 
 == Changelog ==
+
+= 0.4.0 =
+
+* Added structural REST exposure findings to the REST inventory: every registered handler is classified by its registered permission callback as having no effective check, as `__return_true`, as `__return_false`, or as unknown, and the counts are reported without invoking any callback.
+* Added a REST surface baseline and diff on the REST API tab, showing routes added, removed, or changed in exposure class since the baseline, with explicit capture and clear actions.
+* Added the observed result of the most recent alert send cycle to the three alert tools, stating whether the mail transport accepted the message, did not accept it, or raised an error, without claiming delivery.
+* Clarified that the file-editor lock defines DISALLOW_FILE_EDIT at runtime rather than only storing a preference.
 
 = 0.3.1 =
 

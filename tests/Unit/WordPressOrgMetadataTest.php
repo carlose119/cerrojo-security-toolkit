@@ -12,7 +12,7 @@ final class WordPressOrgMetadataTest extends TestCase
 {
     private const EXPECTED_PLUGIN_NAME = 'Cerrojo Security Toolkit';
     private const EXPECTED_TEXT_DOMAIN = 'cerrojo-security-toolkit';
-    private const EXPECTED_VERSION = '0.3.1';
+    private const EXPECTED_VERSION = '0.4.0';
 
     public function testPublicPluginHeaderUsesWordPressOrgIdentity(): void
     {
@@ -48,7 +48,7 @@ final class WordPressOrgMetadataTest extends TestCase
 
     public function testReadmeStartsChangelogWithCurrentRelease(): void
     {
-        self::assertMatchesRegularExpression('/^== Changelog ==\r?\n\r?\n= 0\.3\.1 =\r?\n/m', $this->readme());
+        self::assertMatchesRegularExpression('/^== Changelog ==\r?\n\r?\n= 0\.4\.0 =\r?\n/m', $this->readme());
     }
 
     public function testReadmeVersionsAndRequirementsAgreeWithPluginHeader(): void
