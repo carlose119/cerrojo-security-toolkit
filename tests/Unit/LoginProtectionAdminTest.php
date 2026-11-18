@@ -198,7 +198,7 @@ namespace BastionSecurityWP\Tests\Unit {
                 'REST Application Password', 'REMOTE_ADDR', 'X-Forwarded-For', 'shared proxy',
                 'Transient eviction', 'read-modify-write', 'not a WAF', 'DDoS',
                 'Reset temporary blocks', 'aggregate metrics', 'only administrator session',
-                'remain in the database', 'no uninstall cleanup routine',
+                'remain in the database', 'removes nothing it does not own',
             ] as $expected) {
                 self::assertStringContainsString($expected, $readme, $expected);
             }

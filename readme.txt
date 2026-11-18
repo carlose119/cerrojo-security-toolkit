@@ -31,7 +31,7 @@ Controls are designed to be reviewed, enabled, verified, and reversed individual
 
 Cerrojo Security Toolkit is not a web application firewall or malware scanner. It does not certify a site or guarantee complete protection. Use it as one layer in a broader security and recovery plan.
 
-Saved settings remain until you change them. Deactivation stops the plugin's runtime behavior but preserves its settings, metrics, and temporary state. The plugin currently provides no uninstall cleanup routine.
+Saved settings remain until you change them or delete the plugin. Deactivation stops the plugin's runtime behavior but preserves its settings, metrics, and temporary state. Deleting the plugin runs a cleanup routine that removes the state Cerrojo stored, and nothing else.
 
 == Installation ==
 
@@ -65,7 +65,7 @@ A changed raw string is observed even when redaction or truncation makes the dis
 
 = Does uninstalling remove saved data? =
 
-No. This version has no uninstall cleanup routine, so plugin-owned settings remain unless they are changed or removed separately.
+Yes. Deleting the plugin runs a cleanup routine that removes the fourteen options Cerrojo stores: its tool configuration, its login-protection metrics, the last observed alert result of each alert tool, and the REST surface baseline. It also removes the temporary login-protection blocks Cerrojo created, when the site stores transients as options rows. On a site with a persistent object cache those blocks are cache entries rather than options rows, so they are not removed and expire with their own timeout, which is at most 30 minutes. The transient deletion is bounded: at most twenty statements of 500 rows plus one confirming statement, and it reports when it stops there, a case only reachable when more than ten thousand matching temporary rows are waiting at once. Nothing else is removed, because the routine only deletes keys Cerrojo owns. It runs against the site WordPress is uninstalling the plugin from, and the plugin writes no network options. Deactivating the plugin keeps all of this so a later reactivation finds its configuration intact.
 
 == Changelog ==
 
