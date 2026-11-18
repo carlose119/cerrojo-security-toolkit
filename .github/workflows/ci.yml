@@ -147,7 +147,7 @@ jobs:
           unzip -q "$fixture/downloads/woocommerce.zip" -d "$fixture/site/wordpress/wp-content/plugins"
           composer install --no-dev --classmap-authoritative --no-interaction --no-progress --no-scripts
           mkdir "$fixture/site/wordpress/wp-content/plugins/bastion-security-wp"
-          cp -a cerrojo-security-toolkit.php composer.json composer.lock README.md src vendor \
+          cp -a cerrojo-security-toolkit.php uninstall.php composer.json composer.lock README.md src vendor \
             "$fixture/site/wordpress/wp-content/plugins/bastion-security-wp/"
           cp "$fixture/site/wordpress/wp-config-sample.php" "$fixture/site/wordpress/wp-config.php"
           sed -i \
@@ -167,4 +167,7 @@ jobs:
           result="$(php tests/Integration/WooCommerceRestInventory.php "$fixture/site/wordpress")"
           printf '%s\n' "$result"
           grep -Fxq 'BASTION_WC_COMPAT_OK: inventory assertions passed' <<< "$result"
+          uninstall_result="$(php tests/Integration/UninstallSmoke.php "$fixture/site/wordpress")"
+          printf '%s\n' "$uninstall_result"
+          grep -Fxq 'BASTION_UNINSTALL_OK: owned options and transients removed, foreign keys preserved' <<< "$uninstall_result"
           rm -f "$fixture/site/wordpress/wp-config.php"

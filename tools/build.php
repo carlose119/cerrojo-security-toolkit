@@ -114,7 +114,7 @@ try {
     mkdir($stage, 0777, true);
     $zipTimestamp = mktime(0, 0, 0, 1, 1, 1981);
 
-    foreach (['cerrojo-security-toolkit.php', 'readme.txt', 'LICENSE', 'composer.json', 'composer.lock'] as $file) {
+    foreach (['cerrojo-security-toolkit.php', 'readme.txt', 'uninstall.php', 'LICENSE', 'composer.json', 'composer.lock'] as $file) {
         $source = $root . '/' . $file;
         copy(sourcePath($source, $root, $root), $stage . '/' . $file);
     }

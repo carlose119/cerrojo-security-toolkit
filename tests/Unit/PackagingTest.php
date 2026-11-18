@@ -57,11 +57,11 @@ final class PackagingTest extends TestCase
         sort($sorted, SORT_STRING);
         self::assertSame($sorted, $entries);
 
-        foreach (['cerrojo-security-toolkit.php', 'readme.txt', 'LICENSE', 'composer.json', 'src/Bootstrap.php', 'assets/css/admin.css', 'vendor/autoload.php'] as $required) {
+        foreach (['cerrojo-security-toolkit.php', 'readme.txt', 'uninstall.php', 'LICENSE', 'composer.json', 'src/Bootstrap.php', 'src/Uninstall.php', 'assets/css/admin.css', 'vendor/autoload.php'] as $required) {
             self::assertContains(self::ROOT . $required, $entries);
         }
 
-        $allowedTopLevel = ['LICENSE', 'assets', 'cerrojo-security-toolkit.php', 'composer.json', 'readme.txt', 'src', 'vendor'];
+        $allowedTopLevel = ['LICENSE', 'assets', 'cerrojo-security-toolkit.php', 'composer.json', 'readme.txt', 'src', 'uninstall.php', 'vendor'];
 
         foreach ($entries as $entry) {
             $relative = substr($entry, strlen(self::ROOT));
