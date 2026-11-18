@@ -145,8 +145,15 @@ final class UninstallBoundaryTest extends TestCase
 
             $code = (string) file_get_contents($file->getPathname());
 
+            // The contract this guard relies on: an option the plugin stores is
+            // declared as a class constant whose name mentions OPTION and whose
+            // value carries the plugin prefix. Admin action and nonce constants
+            // share the prefix but are not stored state, so they stay out. A
+            // storage constant that breaks either half of the shape cannot be
+            // derived, which is why the emptiness assertions below fail loudly
+            // instead of passing quietly when the shape changes.
             preg_match_all(
-                "~public const (?:OPTION_NAME|CONFIG_OPTION|METRICS_OPTION|RESULT_OPTION_NAME|GROUPS_OPTION_NAME)\s*=\s*'([^']+)'~",
+                "~public const [A-Z_]*OPTION[A-Z0-9_]*\s*=\s*'(bastion_security_wp_[a-z0-9_]*)'~",
                 $code,
                 $options,
             );
@@ -168,10 +175,22 @@ final class UninstallBoundaryTest extends TestCase
         $expected = array_keys($derived);
         sort($expected, SORT_STRING);
 
+        self::assertNotSame(
+            [],
+            $expected,
+            'The derivation found no plugin-owned option constant under src/; the declaration shape changed and this guard must be updated.',
+        );
+
         self::assertSame(
             $expected,
             $sortedDeclared,
             'The removal list diverges from the option names written under src/.',
+        );
+
+        self::assertNotSame(
+            [],
+            $prefixes,
+            'The derivation found no hashed transient prefix under src/; the key shape changed and this guard must be updated.',
         );
 
         $declaredPrefixes = Uninstall::transientPrefixes();
