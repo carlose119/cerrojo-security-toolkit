@@ -460,6 +460,44 @@ final class UninstallTest extends TestCase
     }
 
     /**
+     * Two directories holding the same code share option names. Deleting the
+     * inactive copy must not remove the state the running copy is using, so the
+     * entry only removes anything when its own class is the loaded one.
+     */
+    public function testEntryLeavesStateAloneWhenAnotherCopyIsLoaded(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $directory = sys_get_temp_dir() . '/bastion-uninstall-' . bin2hex(random_bytes(8));
+        self::assertTrue(mkdir($directory, 0700, true));
+
+        $entry = $directory . '/uninstall.php';
+        self::assertTrue(copy($root . '/uninstall.php', $entry));
+
+        try {
+            $run = $this->runEntry([
+                'entry' => $root . '/tests/Unit/fixtures/uninstall-entry-with-sibling-loaded.php',
+                'args' => [$entry, $root . '/vendor/autoload.php'],
+            ]);
+
+            self::assertSame(0, $run['exit']);
+            self::assertSame('', $run['stdout']);
+            self::assertSame(
+                [],
+                self::recorded($run['calls'], 'delete_option'),
+                'A duplicate directory removed the state of the copy that is running.',
+            );
+            self::assertSame([], self::recorded($run['calls'], 'query'));
+
+            $reported = self::recorded($run['calls'], 'wp_trigger_error');
+            self::assertCount(1, $reported, 'Skipping the removal was not reported.');
+            self::assertStringContainsString('another copy is loaded from', $reported[0]);
+        } finally {
+            unlink($entry);
+            rmdir($directory);
+        }
+    }
+
+    /**
      * @param list<string> $deleted
      * @param list<string> $purged
      */

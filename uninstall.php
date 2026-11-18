@@ -15,6 +15,13 @@ declare(strict_types=1);
  * error_log(), which WordPress never gates, and through wp_trigger_error(),
  * which adds its own notice only when WP_DEBUG is on. Reporting through the
  * WordPress function alone would stay silent on a default production site.
+ *
+ * One more case is worse than a skipped cleanup: removing the state of a copy
+ * that is still running. Two directories holding the same code share the class
+ * names and therefore the option names, so deleting the inactive one would run
+ * this entry with the active copy's class already loaded. The entry only
+ * removes anything when the class it is about to use lives inside its own
+ * directory.
  */
 
 if (! defined('WP_UNINSTALL_PLUGIN')) {
@@ -32,8 +39,22 @@ $uninstallReport = static function (string $problem): void {
 };
 
 $uninstallAutoloader = __DIR__ . '/vendor/autoload.php';
+$uninstallOwnDirectory = realpath(__DIR__);
+$uninstallLoaded = null;
 
-if (! is_readable($uninstallAutoloader)) {
+if (class_exists(\BastionSecurityWP\Uninstall::class)) {
+    $uninstallSource = (new \ReflectionClass(\BastionSecurityWP\Uninstall::class))->getFileName();
+    $uninstallLoaded = is_string($uninstallSource) ? realpath($uninstallSource) : null;
+}
+
+if (is_string($uninstallLoaded)
+    && ($uninstallOwnDirectory === false
+        || ! str_starts_with($uninstallLoaded, $uninstallOwnDirectory . DIRECTORY_SEPARATOR))) {
+    $uninstallReport(
+        'Cerrojo removed nothing: another copy is loaded from ' . dirname($uninstallLoaded)
+        . ', so the state that copy is using was left alone',
+    );
+} elseif (! is_readable($uninstallAutoloader)) {
     $uninstallReport('Cerrojo removed nothing: vendor/autoload.php is missing or unreadable');
 } else {
     require_once $uninstallAutoloader;
@@ -47,4 +68,4 @@ if (! is_readable($uninstallAutoloader)) {
     }
 }
 
-unset($uninstallAutoloader, $uninstallReport);
+unset($uninstallAutoloader, $uninstallOwnDirectory, $uninstallLoaded, $uninstallReport);
