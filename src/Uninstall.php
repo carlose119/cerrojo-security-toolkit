@@ -16,8 +16,14 @@ use Closure;
  *
  * The login-protection throttles are stored under hashed keys, so they cannot
  * be named one by one; they are reached by an escaped prefix probe on the
- * options table. That probe is a direct row deletion, which bypasses an object
- * cache; any entry left in a persistent cache expires with its own timeout.
+ * options table. That probe compares the option names as binary strings, so it
+ * matches the exact bytes the plugin writes rather than a collation-defined
+ * case-insensitive neighbourhood, and it deletes in bounded batches. It is a
+ * direct row deletion, which bypasses an object cache; any entry left in a
+ * persistent cache expires with its own timeout.
+ *
+ * A cleanup that cannot finish must not look like one that did: every branch
+ * that skips or fails returns a problem description instead of staying silent.
  */
 final class Uninstall
 {
@@ -45,10 +51,16 @@ final class Uninstall
     /** Prefixes of the hashed login-protection transient keys. */
     private const TRANSIENT_PREFIXES = ['bastion_lpu_', 'bastion_lpi_'];
 
+    /** Rows removed by one statement, so each delete window stays short. */
+    private const DELETE_BATCH_SIZE = 500;
+
+    /** Upper bound on statements, so an unexpected row explosion ends loudly. */
+    private const MAX_DELETE_BATCHES = 20;
+
     /** @var Closure(string): bool */
     private readonly Closure $deleteOption;
 
-    /** @var Closure(list<string>): void */
+    /** @var Closure(list<string>): ?string */
     private readonly Closure $purgeTransients;
 
     public function __construct(?Closure $deleteOption = null, ?Closure $purgeTransients = null)
@@ -56,9 +68,7 @@ final class Uninstall
         $this->deleteOption = $deleteOption
             ?? static fn (string $name): bool => (bool) \delete_option($name);
         $this->purgeTransients = $purgeTransients
-            ?? static function (array $patterns): void {
-                self::purgeTransientRows($patterns);
-            };
+            ?? static fn (array $patterns): ?string => self::purgeTransientRows($patterns);
     }
 
     /**
@@ -101,13 +111,22 @@ final class Uninstall
         return $patterns;
     }
 
-    public function run(): void
+    /**
+     * A failed delete_option() cannot be told apart from an absent row: both
+     * return false, and neither is a problem worth reporting, because the purge
+     * that follows would surface a broken database layer anyway.
+     *
+     * @return list<string> the problems met, empty when everything was removed
+     */
+    public function run(): array
     {
         foreach (self::OPTIONS as $name) {
             ($this->deleteOption)($name);
         }
 
-        ($this->purgeTransients)(self::transientLikePatterns());
+        $problem = ($this->purgeTransients)(self::transientLikePatterns());
+
+        return is_string($problem) && $problem !== '' ? [$problem] : [];
     }
 
     /**
@@ -120,9 +139,21 @@ final class Uninstall
     }
 
     /**
+     * WordPress compares LIKE against the column collation, which is case
+     * insensitive by default, so a plain LIKE also matches a case variant of a
+     * plugin transient name. Casting the column keeps the comparison to the
+     * exact bytes the plugin writes. The cast gives up the option_name index,
+     * which is acceptable for a one-time uninstall that normally needs two
+     * statements.
+     *
+     * The loop deletes until a statement matches nothing, so a page smaller than
+     * the limit cannot leave rows behind, and it probes once past the cap so a
+     * last page that exactly fills the limit is not reported as a failure.
+     *
      * @param list<string> $patterns
+     * @return string|null a problem description, null when the purge ran clean
      */
-    private static function purgeTransientRows(array $patterns): void
+    private static function purgeTransientRows(array $patterns): ?string
     {
         global $wpdb;
 
@@ -132,12 +163,44 @@ final class Uninstall
             || $wpdb->options === ''
             || ! method_exists($wpdb, 'prepare')
             || ! method_exists($wpdb, 'query')) {
-            return;
+            return 'transient purge skipped: the WordPress database layer is unavailable';
         }
 
-        $conditions = implode(' OR ', array_fill(0, count($patterns), 'option_name LIKE %s'));
-        $sql = sprintf('DELETE FROM %s WHERE %s', $wpdb->options, $conditions);
+        $conditions = implode(' OR ', array_fill(0, count($patterns), 'CAST(option_name AS BINARY) LIKE %s'));
+        $batches = 0;
 
-        $wpdb->query($wpdb->prepare($sql, ...$patterns));
+        while (true) {
+            $statement = sprintf(
+                'DELETE FROM %s WHERE %s LIMIT %d',
+                $wpdb->options,
+                $conditions,
+                self::DELETE_BATCH_SIZE,
+            );
+
+            $deleted = $wpdb->query($wpdb->prepare($statement, ...$patterns));
+
+            if ($deleted === false) {
+                $error = isset($wpdb->last_error) && is_string($wpdb->last_error) ? $wpdb->last_error : '';
+
+                return 'transient purge failed' . ($error === '' ? '' : ': ' . $error);
+            }
+
+            if (! is_int($deleted)) {
+                return 'transient purge failed: the statement returned an unexpected result';
+            }
+
+            if ($deleted === 0) {
+                return null;
+            }
+
+            ++$batches;
+
+            if ($batches > self::MAX_DELETE_BATCHES) {
+                return sprintf(
+                    'transient purge stopped: more than %d matching rows were waiting',
+                    self::MAX_DELETE_BATCHES * self::DELETE_BATCH_SIZE,
+                );
+            }
+        }
     }
 }

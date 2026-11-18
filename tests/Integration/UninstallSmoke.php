@@ -41,9 +41,15 @@ $lookalikeOption = 'bastion_lp';
 $foreignTransient = 'cerrojo_foreign_probe';
 $sentinelValue = 'bastion-sentinel';
 
-// Names that only resemble a transient row: a probe that relaxes its escaping
-// would delete these, so they stay as sentinels for the escaped LIKE shape.
-$transientLookalikes = ['xtransient_bastion_lpu_1_abc', '_transientXbastion_lpu_1_abc'];
+// Names that only resemble a transient row: a probe that relaxes its escaping or
+// its case sensitivity would delete these, so they stay as sentinels for the
+// escaped, binary-comparison LIKE shape.
+$transientLookalikes = [
+    'xtransient_bastion_lpu_1_abc',
+    '_transientXbastion_lpu_1_abc',
+    '_TRANSIENT_BASTION_LPU_9_zzz',
+    'XtransientYbastion_lpu_9_zzz',
+];
 
 update_option($sentinelOption, $sentinelValue);
 update_option($lookalikeOption, $sentinelValue);
@@ -117,7 +123,10 @@ foreach ($setOwned as $name) {
 }
 
 $patterns = Uninstall::transientLikePatterns();
-$conditions = implode(' OR ', array_fill(0, count($patterns), 'option_name LIKE %s'));
+$conditions = implode(' OR ', array_fill(0, count($patterns), 'CAST(option_name AS BINARY) LIKE %s'));
+
+// The comparison is binary on purpose: a plain LIKE would also match the
+// case-variant sentinels this script seeds below, which the purge must keep.
 $remaining = $wpdb->get_col(
     $wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE {$conditions}", ...$patterns),
 );

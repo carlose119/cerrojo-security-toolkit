@@ -117,10 +117,11 @@ final class UninstallTest extends TestCase
         $deleted = [];
         $purged = [];
 
-        $this->uninstall($deleted, $purged)->run();
+        $problems = $this->uninstall($deleted, $purged)->run();
 
         self::assertSame(self::PINNED_OPTIONS, $deleted);
         self::assertSame(Uninstall::transientLikePatterns(), $purged);
+        self::assertSame([], $problems, 'A clean cleanup reported a problem.');
     }
 
     public function testForeignKeysAreNeverRemoved(): void
@@ -150,10 +151,34 @@ final class UninstallTest extends TestCase
         $deleted = [];
         $purged = [];
 
-        $this->uninstall($deleted, $purged, static fn (string $name): bool => false)->run();
+        $problems = $this->uninstall($deleted, $purged, static fn (string $name): bool => false)->run();
 
         self::assertSame(self::PINNED_OPTIONS, $deleted);
         self::assertSame(Uninstall::transientLikePatterns(), $purged);
+        self::assertSame([], $problems);
+    }
+
+    /**
+     * A purge that skips or fails has to come back as a problem, never as a
+     * clean result: the entry reports whatever this returns.
+     */
+    public function testRunReturnsTheProblemThePurgeReports(): void
+    {
+        $deleted = [];
+        $purged = [];
+
+        $problems = $this->uninstall($deleted, $purged, null, 'transient purge failed: disk full')->run();
+
+        self::assertSame(['transient purge failed: disk full'], $problems);
+        self::assertSame(self::PINNED_OPTIONS, $deleted, 'The option deletions must still run before the purge.');
+    }
+
+    public function testRunTreatsAnEmptyProblemDescriptionAsClean(): void
+    {
+        $deleted = [];
+        $purged = [];
+
+        self::assertSame([], $this->uninstall($deleted, $purged, null, '')->run());
     }
 
     public function testRunIsRepeatableWithoutChangingItsTargets(): void
@@ -207,22 +232,296 @@ final class UninstallTest extends TestCase
      */
     public function testEntryDeletesThePinnedBoundaryWhenWordPressDefinesTheConstant(): void
     {
+        $run = $this->runEntry();
+
+        self::assertSame('', $run['stdout'], 'The uninstall entry printed output: ' . $run['stdout']);
+        self::assertSame('', $run['stderr'], 'The uninstall entry failed: ' . $run['stderr']);
+        self::assertStringNotContainsString('Cerrojo uninstall:', $run['log'], 'A clean cleanup logged a problem: ' . $run['log']);
+        self::assertSame(0, $run['exit']);
+
+        self::assertSame(self::PINNED_OPTIONS, self::recorded($run['calls'], 'delete_option'));
+        self::assertSame([], self::recorded($run['calls'], 'wp_trigger_error'), 'A clean cleanup reported a problem.');
+
+        $queries = self::recorded($run['calls'], 'query');
+        self::assertCount(2, $queries, 'One statement deletes the rows and a second confirms nothing is left.');
+        $sql = $queries[0];
+        self::assertSame($sql, $queries[1]);
+        self::assertStringStartsWith('DELETE FROM wp_options WHERE CAST(option_name AS BINARY) LIKE %s', $sql);
+        self::assertSame(4, substr_count($sql, 'LIKE %s'));
+        self::assertSame(3, substr_count($sql, ' OR '));
+        self::assertStringEndsWith('LIMIT 500', $sql);
+        self::assertStringNotContainsString('LIKE %s COLLATE', $sql);
+
+        $prepared = self::recorded($run['calls'], 'prepare_args');
+        self::assertCount(2, $prepared, 'Each statement is prepared exactly once.');
+        self::assertSame(Uninstall::transientLikePatterns(), explode('|', $prepared[0]));
+        self::assertSame(explode('|', $prepared[0]), explode('|', $prepared[1]));
+    }
+
+    /**
+     * A failed statement must reach the operator through WordPress's own error
+     * channel, and must not abort the option deletions that already ran.
+     */
+    public function testEntryReportsAFailedPurge(): void
+    {
+        $run = $this->runEntry(['BASTION_UNINSTALL_QUERY_RESULT' => 'false']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertStringContainsString('Cerrojo uninstall: transient purge failed: disk full', $run['log']);
+
+        self::assertSame(self::PINNED_OPTIONS, self::recorded($run['calls'], 'delete_option'));
+
+        $reported = self::recorded($run['calls'], 'wp_trigger_error');
+        self::assertCount(1, $reported, 'A failed purge was not reported.');
+        self::assertStringContainsString('transient purge failed', $reported[0]);
+        self::assertStringContainsString('disk full', $reported[0]);
+    }
+
+    /**
+     * error_log() is the only channel WordPress does not gate behind WP_DEBUG,
+     * so the report has to reach it even when wp_trigger_error() stays quiet.
+     */
+    public function testEntryLogsTheReportOutsideTheWordPressDebugGate(): void
+    {
+        $run = $this->runEntry(['BASTION_UNINSTALL_NO_WPDB' => '1']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertStringContainsString(
+            'Cerrojo uninstall: transient purge skipped: the WordPress database layer is unavailable',
+            $run['log'],
+        );
+
+        $reported = self::recorded($run['calls'], 'wp_trigger_error');
+        self::assertCount(1, $reported);
+    }
+
+    /**
+     * An unusable database layer skips the purge and says so, while the option
+     * deletions still run.
+     */
+    public function testEntryReportsAnUnavailableDatabaseLayer(): void
+    {
+        $run = $this->runEntry(['BASTION_UNINSTALL_NO_WPDB' => '1']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertSame('', $run['stdout']);
+        self::assertSame(self::PINNED_OPTIONS, self::recorded($run['calls'], 'delete_option'));
+        self::assertSame([], self::recorded($run['calls'], 'query'), 'No statement may run without a database layer.');
+        self::assertSame(
+            ['transient purge skipped: the WordPress database layer is unavailable'],
+            self::recorded($run['calls'], 'wp_trigger_error'),
+        );
+    }
+
+    /**
+     * A statement result that is neither a row count nor false cannot be read as
+     * success, so it is reported instead of ending the purge quietly.
+     */
+    public function testEntryTreatsANonIntegerStatementResultAsAProblem(): void
+    {
+        foreach (['true', 'garbage'] as $result) {
+            $run = $this->runEntry(['BASTION_UNINSTALL_QUERY_RESULT' => $result]);
+
+            self::assertSame(0, $run['exit'], 'Result mode: ' . $result);
+
+            $reported = self::recorded($run['calls'], 'wp_trigger_error');
+            self::assertCount(1, $reported, 'Result mode not reported: ' . $result);
+            self::assertStringContainsString('unexpected result', $reported[0], 'Result mode: ' . $result);
+        }
+    }
+
+    /**
+     * A last page that exactly fills the limit must not be reported as a cap
+     * failure: the extra probe settles it.
+     */
+    public function testEntryDoesNotReportTheCapWhenNothingIsLeft(): void
+    {
+        $sequence = implode(',', [...array_fill(0, 20, '500'), '0']);
+
+        $run = $this->runEntry(['BASTION_UNINSTALL_QUERY_SEQUENCE' => $sequence]);
+
+        self::assertSame(0, $run['exit']);
+        self::assertCount(21, self::recorded($run['calls'], 'query'));
+        self::assertSame([], self::recorded($run['calls'], 'wp_trigger_error'), 'A finished purge reported a cap failure.');
+    }
+
+    /**
+     * A class that never loads removes nothing, and says so.
+     */
+    public function testEntryReportsAClassThatDidNotLoad(): void
+    {
         $root = dirname(__DIR__, 2);
+        $directory = sys_get_temp_dir() . '/bastion-uninstall-' . bin2hex(random_bytes(8));
+        self::assertTrue(mkdir($directory . '/vendor', 0700, true));
+
+        $entry = $directory . '/uninstall.php';
+        $autoloader = $directory . '/vendor/autoload.php';
+        self::assertTrue(copy($root . '/uninstall.php', $entry));
+        self::assertNotFalse(file_put_contents($autoloader, "<?php\n\nreturn true;\n"));
+
+        try {
+            $run = $this->runEntry([
+                'entry' => $root . '/tests/Unit/fixtures/uninstall-entry-from-path.php',
+                'args' => [$entry],
+            ]);
+
+            self::assertSame(0, $run['exit']);
+            self::assertSame([], self::recorded($run['calls'], 'delete_option'));
+
+            $reported = self::recorded($run['calls'], 'wp_trigger_error');
+            self::assertCount(1, $reported);
+            self::assertStringContainsString('the Uninstall class did not load', $reported[0]);
+        } finally {
+            unlink($autoloader);
+            rmdir($directory . '/vendor');
+            unlink($entry);
+            rmdir($directory);
+        }
+    }
+
+    /**
+     * The batches are bounded: a row explosion must end with a reported
+     * problem instead of an unbounded loop.
+     */
+    public function testEntryStopsAfterTheBatchCapAndReportsIt(): void
+    {
+        $run = $this->runEntry(['BASTION_UNINSTALL_QUERY_SEQUENCE' => implode(',', array_fill(0, 40, '500'))]);
+
+        self::assertSame(0, $run['exit']);
+        self::assertCount(21, self::recorded($run['calls'], 'query'), 'The batch cap was not honoured.');
+
+        $reported = self::recorded($run['calls'], 'wp_trigger_error');
+        self::assertCount(1, $reported);
+        self::assertStringContainsString('more than 10000 matching rows', $reported[0]);
+    }
+
+    /**
+     * The report must name the entry, not a filesystem path, or every notice a
+     * site logs carries an absolute path.
+     */
+    public function testEntryNamesTheEntryFileWhenItReportsThroughWordPress(): void
+    {
+        $run = $this->runEntry(['BASTION_UNINSTALL_NO_WPDB' => '1']);
+
+        self::assertSame(
+            ['uninstall.php'],
+            self::recorded($run['calls'], 'wp_trigger_error_function'),
+            'The report must name the entry, not a filesystem path.',
+        );
+    }
+
+    /**
+     * The integration smoke has to verify the purge with the comparison it
+     * deletes with: a collation-sensitive LIKE there reports a case-variant
+     * sentinel as a survivor and fails CI with a message that mimics a defect.
+     */
+    public function testIntegrationSmokeVerifiesThePurgeWithTheSameBinaryComparisonItDeletesWith(): void
+    {
+        $smoke = (string) file_get_contents(dirname(__DIR__, 2) . '/tests/Integration/UninstallSmoke.php');
+
+        self::assertStringContainsString('CAST(option_name AS BINARY) LIKE %s', $smoke);
+        self::assertSame(
+            1,
+            substr_count($smoke, 'option_name LIKE %s'),
+            'Only the ownership probe may use a collation-sensitive LIKE; the survivor check must compare bytes.',
+        );
+    }
+
+    /**
+     * An entry that cannot load its autoloader removes nothing, and says so
+     * instead of passing as a clean uninstall.
+     */
+    public function testEntryReportsAMissingAutoloader(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $directory = sys_get_temp_dir() . '/bastion-uninstall-' . bin2hex(random_bytes(8));
+        self::assertTrue(mkdir($directory, 0700, true));
+
+        $entry = $directory . '/uninstall.php';
+        self::assertTrue(copy($root . '/uninstall.php', $entry));
+
+        try {
+            $run = $this->runEntry([
+                'entry' => $root . '/tests/Unit/fixtures/uninstall-entry-from-path.php',
+                'args' => [$entry],
+            ]);
+
+            self::assertSame(0, $run['exit']);
+            self::assertSame('', $run['stderr']);
+            self::assertSame([], self::recorded($run['calls'], 'delete_option'), 'Nothing should be removed without the autoloader.');
+
+            $reported = self::recorded($run['calls'], 'wp_trigger_error');
+            self::assertCount(1, $reported, 'A skipped cleanup was not reported.');
+            self::assertStringContainsString('vendor/autoload.php', $reported[0]);
+        } finally {
+            unlink($entry);
+            rmdir($directory);
+        }
+    }
+
+    /**
+     * @param list<string> $deleted
+     * @param list<string> $purged
+     */
+    private function uninstall(
+        array &$deleted,
+        array &$purged,
+        ?\Closure $deleter = null,
+        ?string $purgeProblem = null,
+    ): Uninstall {
+        return new Uninstall(
+            static function (string $name) use (&$deleted, $deleter): bool {
+                $deleted[] = $name;
+
+                return $deleter instanceof \Closure ? $deleter($name) : true;
+            },
+            static function (array $patterns) use (&$purged, $purgeProblem): ?string {
+                $purged = [...$purged, ...$patterns];
+
+                return $purgeProblem;
+            },
+        );
+    }
+
+    /**
+     * @param array<string, string|list<string>> $options an optional entry override and its arguments
+     * @return array{exit: int, stdout: string, stderr: string, log: string, calls: list<array{kind: string, value: string}>}
+     */
+    private function runEntry(array $options = []): array
+    {
+        $root = dirname(__DIR__, 2);
+        $entry = is_string($options['entry'] ?? null)
+            ? (string) $options['entry']
+            : $root . '/tests/Unit/fixtures/uninstall-entry-runner.php';
+        $arguments = is_array($options['args'] ?? null) ? array_values($options['args']) : [];
+        unset($options['entry'], $options['args']);
+
         $record = (string) tempnam(sys_get_temp_dir(), 'bastion-uninstall-');
         self::assertNotSame('', $record);
         file_put_contents($record, '');
+
+        // error_log() writes wherever the ini setting points, so the test gives it
+        // an explicit destination and reads the channel the way a site would.
+        $log = (string) tempnam(sys_get_temp_dir(), 'bastion-uninstall-log-');
+        self::assertNotSame('', $log);
+        file_put_contents($log, '');
 
         $process = proc_open(
             [
                 PHP_BINARY,
                 '-d',
                 'auto_prepend_file=' . $root . '/tests/Unit/fixtures/wordpress-stubs.php',
-                $root . '/tests/Unit/fixtures/uninstall-entry-runner.php',
+                '-d',
+                'error_log=' . $log,
+                '-d',
+                'xdebug.mode=off',
+                $entry,
+                ...$arguments,
             ],
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $root,
-            array_merge(getenv(), ['BASTION_UNINSTALL_RECORD' => $record]),
+            array_merge(getenv(), ['BASTION_UNINSTALL_RECORD' => $record], $options),
         );
 
         self::assertIsResource($process);
@@ -234,53 +533,31 @@ final class UninstallTest extends TestCase
         $exitCode = proc_close($process);
 
         $lines = array_values(array_filter(explode("\n", (string) file_get_contents($record))));
+        $logged = (string) file_get_contents($log);
         unlink($record);
+        unlink($log);
 
-        self::assertSame('', $stdout, 'The uninstall entry printed output: ' . $stdout);
-        self::assertSame('', $stderr, 'The uninstall entry failed: ' . $stderr);
-        self::assertSame(0, $exitCode);
-
-        $calls = array_map(
-            static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR),
-            $lines,
-        );
-
-        $deleted = array_values(array_map(
-            static fn (array $call): string => (string) $call['value'],
-            array_filter($calls, static fn (array $call): bool => $call['kind'] === 'delete_option'),
-        ));
-        self::assertSame(self::PINNED_OPTIONS, $deleted);
-
-        $queries = array_values(array_filter($calls, static fn (array $call): bool => $call['kind'] === 'query'));
-        self::assertCount(1, $queries, 'The entry ran more than one statement.');
-        $sql = (string) $queries[0]['value'];
-        self::assertStringStartsWith('DELETE FROM wp_options WHERE ', $sql);
-        self::assertSame(4, substr_count($sql, 'option_name LIKE %s'));
-        self::assertSame(3, substr_count($sql, ' OR '));
-
-        $prepared = array_values(array_map(
-            static fn (array $call): string => (string) $call['value'],
-            array_filter($calls, static fn (array $call): bool => $call['kind'] === 'prepare_args'),
-        ));
-        self::assertCount(1, $prepared, 'The statement was not prepared exactly once.');
-        self::assertSame(Uninstall::transientLikePatterns(), explode('|', $prepared[0]));
+        return [
+            'exit' => $exitCode,
+            'stdout' => $stdout,
+            'stderr' => $stderr,
+            'log' => $logged,
+            'calls' => array_map(
+                static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR),
+                $lines,
+            ),
+        ];
     }
 
     /**
-     * @param list<string> $deleted
-     * @param list<string> $purged
+     * @param list<array{kind: string, value: string}> $calls
+     * @return list<string>
      */
-    private function uninstall(array &$deleted, array &$purged, ?\Closure $deleter = null): Uninstall
+    private static function recorded(array $calls, string $kind): array
     {
-        return new Uninstall(
-            static function (string $name) use (&$deleted, $deleter): bool {
-                $deleted[] = $name;
-
-                return $deleter instanceof \Closure ? $deleter($name) : true;
-            },
-            static function (array $patterns) use (&$purged): void {
-                $purged = [...$purged, ...$patterns];
-            },
-        );
+        return array_values(array_map(
+            static fn (array $call): string => (string) $call['value'],
+            array_filter($calls, static fn (array $call): bool => $call['kind'] === $kind),
+        ));
     }
 }

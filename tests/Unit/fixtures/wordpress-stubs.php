@@ -8,6 +8,14 @@ declare(strict_types=1);
  * It exists only so the entry can execute outside WordPress and record what it
  * would delete. Every call is appended to the JSON-lines file named by
  * BASTION_UNINSTALL_RECORD, which the test parses to assert the exact boundary.
+ *
+ * Knobs, all through the environment:
+ * - BASTION_UNINSTALL_QUERY_RESULT: "false" makes every statement fail with a
+ *   recorded last_error, "true" and "garbage" return a non-integer result, and
+ *   a number is returned once before the sequence falls back to zero rows.
+ * - BASTION_UNINSTALL_QUERY_SEQUENCE: comma-separated affected-row counts for
+ *   successive statements, zero once exhausted.
+ * - BASTION_UNINSTALL_NO_WPDB: when set, no $wpdb is registered at all.
  */
 
 $GLOBALS['bastion_uninstall_record'] = getenv('BASTION_UNINSTALL_RECORD') ?: '';
@@ -34,9 +42,37 @@ function delete_option(string $name): bool
     return true;
 }
 
+function wp_trigger_error(string $function_name, string $message, int $error_level = E_USER_NOTICE, int $error_code = 0): void
+{
+    bastion_uninstall_record('wp_trigger_error_function', $function_name);
+    bastion_uninstall_record('wp_trigger_error', $message);
+}
+
 final class BastionUninstallWpdbStub
 {
     public string $options = 'wp_options';
+
+    public string $last_error = '';
+
+    /** @var list<string> */
+    private array $remaining;
+
+    public function __construct()
+    {
+        $sequence = getenv('BASTION_UNINSTALL_QUERY_SEQUENCE');
+
+        if (is_string($sequence) && $sequence !== '') {
+            $this->remaining = array_map(static fn (string $value): string => trim($value), explode(',', $sequence));
+
+            return;
+        }
+
+        $configured = getenv('BASTION_UNINSTALL_QUERY_RESULT');
+
+        $this->remaining = is_string($configured) && ctype_digit($configured) && $configured !== ''
+            ? [$configured, '0']
+            : ['1', '0'];
+    }
 
     public function prepare(string $query, mixed ...$args): string
     {
@@ -51,12 +87,32 @@ final class BastionUninstallWpdbStub
         return $query;
     }
 
-    public function query(string $sql): bool
+    public function query(string $sql): mixed
     {
         bastion_uninstall_record('query', $sql);
 
-        return true;
+        $mode = getenv('BASTION_UNINSTALL_QUERY_RESULT');
+
+        if ($mode === 'false') {
+            $this->last_error = 'disk full';
+
+            return false;
+        }
+
+        if ($mode === 'true') {
+            return true;
+        }
+
+        if ($mode === 'garbage') {
+            return 'garbage';
+        }
+
+        $next = $this->remaining === [] ? '0' : array_shift($this->remaining);
+
+        return is_string($next) && $next !== '' && ctype_digit($next) ? (int) $next : $next;
     }
 }
 
-$GLOBALS['wpdb'] = new BastionUninstallWpdbStub();
+if (getenv('BASTION_UNINSTALL_NO_WPDB') !== '1') {
+    $GLOBALS['wpdb'] = new BastionUninstallWpdbStub();
+}
