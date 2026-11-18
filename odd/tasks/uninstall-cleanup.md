@@ -19,6 +19,8 @@ Risk: item 1 (irreversible deletion of stored data) — independently verified b
 - S11 (correction, from the native review): a skipped or failed cleanup is never silent. `run()` returns the problems it met, and the entry reports each one through `wp_trigger_error()` when WordPress provides it, so an autoloader that is missing, a class that does not load, an unusable database layer and a failed statement are all observable instead of looking like a clean uninstall.
 - S12 (correction, from the native review): the transient comparison is case-sensitive, because MySQL's default collation makes `LIKE` case-insensitive and the previous probe would have matched a case variant of a plugin transient name. The class docblock states what the statement actually does.
 - S13 (correction, from the native review): the transient deletion is bounded in rows per statement and in batches, and reaching the batch cap is reported as a problem rather than passing as success.
+- S14 (correction, post-merge defect): the removal-list guard derives every plugin-owned option by declaration shape — a constant whose name mentions `OPTION` and whose value carries the plugin prefix — instead of enumerating five constant names, and both derivations fail loudly when they find nothing.
+- S15 (correction, post-merge defect): the entry removes nothing when its own `Uninstall` class was loaded from another directory, because two copies of the same code share the option names and deleting the inactive one would wipe the state the running copy is using.
 
 ## Tasks
 
@@ -72,6 +74,12 @@ Risk: item 1 (irreversible deletion of stored data) — independently verified b
 - PR checks: `test (8.1)`, `test (8.2)`, `test (8.3)`, `test (8.4)` and `woocommerce-compatibility` all passed (run 44403961658).
 - Post-merge CI on `master`: run 44414590882, conclusion success at `f30f608`.
 - Not released: `Stable tag` stays `0.4.0` and the changelog has no entry for this behaviour, so no published version carries it. Publishing needs its own version decision and release cycle.
+
+## Post-merge defects
+
+- Defect A, the removal-list guard had a blind spot: it recognised only five constant names, so an option stored under any other name escaped the derivation and the test that promises the list cannot diverge from `src/` stayed green while that option survived an uninstall. Demonstrated before the fix by seeding `src/DerivationProbe.php` with `STORAGE_OPTION = 'bastion_security_wp_derivation_probe'` (guard green), then fixed in `6524202` (guard fails naming the probe). The first attempt at the fix — any constant carrying the prefix — over-captured the `POST_ACTION` and `NONCE_ACTION` constants of the admin classes, which share the prefix and are not stored state.
+- Defect B, a duplicate directory could delete the running copy's state. The native review raised it as an advisory when the `.svn-staging` twin was spotted; investigation showed that directory is a staging checkout of the same WordPress.org trunk, not a second plugin, so the reachable case is two copies of one plugin: install a duplicate, keep one active, delete the inactive one, and its `uninstall.php` runs with the active copy's class already loaded. Fixed in `5eb9682`: the entry resolves where its class came from and removes nothing unless that file lives inside its own directory, reporting which directory owns the state. RED observed before the fix, GREEN after.
+- Checks after both fixes: 405 tests / 3504 assertions green, `PackagingTest` 9 / 793, archive 51 files, syntax clean over 78 files.
 
 ## Not claimed
 
