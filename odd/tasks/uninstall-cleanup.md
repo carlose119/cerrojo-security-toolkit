@@ -66,9 +66,16 @@ Risk: item 1 (irreversible deletion of stored data) — independently verified b
 - Final checks after round 3: `php vendor/bin/phpunit` 404 tests / 3491 assertions green; `PackagingTest` 9 tests / 793 assertions; archive 51 files; `tools/check-syntax.php` clean over 77 files.
 - Still unpinned by design: the docblock-only claims (a failed `delete_option()` is indistinguishable from an absent row, and the binary cast gives up the `option_name` index).
 
+## Publication
+
+- PR #4 into `master`, merged 2026-11-18 22:45:28Z as merge commit `f30f608`.
+- PR checks: `test (8.1)`, `test (8.2)`, `test (8.3)`, `test (8.4)` and `woocommerce-compatibility` all passed (run 44403961658).
+- Post-merge CI on `master`: run 44414590882, conclusion success at `f30f608`.
+- Not released: `Stable tag` stays `0.4.0` and the changelog has no entry for this behaviour, so no published version carries it. Publishing needs its own version decision and release cycle.
+
 ## Not claimed
 
-- `tests/Integration/UninstallSmoke.php` was written but never executed here: this repository sits inside a live site and no isolated WordPress fixture exists locally. The runtime SQL path is proven by the stub-based subprocess test, the verifier's SQLite execution of the same statement, and by CI, which owns the real-WordPress run. Until that job passes, real-WordPress execution of the uninstall routine is unverified.
+- `tests/Integration/UninstallSmoke.php` was never executed locally: this repository sits inside a live site and no isolated WordPress fixture exists here. It did run in CI — job `woocommerce-compatibility` of run 44403961658 — against WordPress 7.1.4 with WooCommerce 11.0.1 and MariaDB, asserting the purge and the survival of every foreign sentinel, including the case variants of the transient names. The stub-based subprocess tests and the verifier's SQLite execution of the same statement cover it outside CI.
 - No claim that the routine reaches other sites of a multisite installation, or that any object-cache entry is invalidated. The plugin writes no network option and the routine uses the single-site option API.
 
 ## Log
