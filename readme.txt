@@ -3,7 +3,7 @@ Contributors: carlose119
 Tags: security, hardening, login security, security headers, rest api
 Requires at least: 6.8
 Tested up to: 7.1.4
-Stable tag: 0.4.0
+Stable tag: 0.5.0
 Requires PHP: 8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -68,6 +68,13 @@ A changed raw string is observed even when redaction or truncation makes the dis
 Yes. Deleting the plugin runs a cleanup routine that removes the fourteen options Cerrojo stores: its tool configuration, its login-protection metrics, the last observed alert result of each alert tool, and the REST surface baseline. It also removes the temporary login-protection blocks Cerrojo created, when the site stores transients as options rows. On a site with a persistent object cache those blocks are cache entries rather than options rows, so they are not removed and expire with their own timeout, which is at most 30 minutes. The transient deletion is bounded: at most twenty statements of 500 rows plus one confirming statement, and it reports when it stops there, a case only reachable when more than ten thousand matching temporary rows are waiting at once. Nothing else is removed, because the routine only deletes keys Cerrojo owns. It runs against the site WordPress is uninstalling the plugin from, and the plugin writes no network options. When another copy of the plugin is already loaded from a different directory, the routine removes nothing and reports it, because that state belongs to the copy that is running. Deactivating the plugin keeps all of this so a later reactivation finds its configuration intact.
 
 == Changelog ==
+
+= 0.5.0 =
+
+* Added uninstall cleanup: deleting the plugin removes the fourteen options it stores. That covers every tool configuration, the login-protection metrics, the last observed alert result of each alert tool and the REST surface baseline, together with the temporary login-protection blocks the plugin created.
+* The cleanup removes nothing it does not own. It deletes the temporary blocks with an escaped, case-sensitive comparison the database cannot widen by collation, in bounded batches, and it leaves neighbouring options of any name alone.
+* The cleanup reports what it could not finish, through `error_log()` and `wp_trigger_error()`, instead of passing as a clean uninstall. Deleting a duplicate copy of the plugin removes nothing and reports which copy owns the state, because that state belongs to the copy that is running.
+* Deactivating the plugin still preserves all of it, so a later reactivation finds its configuration intact.
 
 = 0.4.0 =
 
