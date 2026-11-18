@@ -21,8 +21,8 @@ Risk: item 5 (delivery and release) — the tag, the GitHub release and the two 
 - T4 — Tag `v0.5.0` from the CI-built artifact commit. Route: parent, through the GitHub release. Commit `9ae6c40`.
 - T5 — GitHub release with the CI artifact as the asset. Route: parent. Commit `9ae6c40`.
 - T6 — Stage the SVN working copy from the same artifact. Route: parent. Commit `9ae6c40`.
-- T7 — The two SVN commits (trunk, then the tag). Route: human, per S3. Commit —
-- T8 — Verify the published state read-only and record it here. Route: parent. Commit —
+- T7 — The two SVN commits (trunk, then the tag). Route: human, per S3. Commits `r3810399`, `r3810400`.
+- T8 — Verify the published state read-only and record it here. Route: parent. Commits `r3810399`, `r3810400`.
 
 ## Progress and evidence
 
@@ -32,7 +32,9 @@ Risk: item 5 (delivery and release) — the tag, the GitHub release and the two 
 - T3: pushed by the human as `9ae6c40`; CI run 44418239528 concluded success on that commit.
 - T4/T5: release `v0.5.0` published at https://github.com/carlose119/cerrojo-security-toolkit/releases/tag/v0.5.0, target `9ae6c4068369baf06201472f782b499677f47f2f`, not a draft and not a prerelease. The asset is the CI artifact, not a local build: `cerrojo-security-toolkit.zip`, 110271 bytes, `sha256:536544d01f3d5b598bd71a9a75c09528b3c594b423e9d5fd5402344961444b29`, verified to carry 51 files, 0.5.0 in the header, `Stable tag` and changelog head, and `uninstall.php`.
 - T6: trunk checked out at revision 3810386 into a temporary working copy and synchronised with that same artifact; `diff -r` against the artifact is empty. `svn status` shows exactly two additions (`uninstall.php`, `src/Uninstall.php`) and five modifications (the plugin file, `readme.txt` and three generated `vendor/composer` files that now list the new class).
-- T7 and T8 remain open: the two SVN commits need the site owner's credentials, and the published WordPress.org state can only be verified after them.
+- T7 and T8: the human ran the two commits after the first attempt failed on authentication (`E215004`, because the commands carried `--non-interactive --no-auth-cache` and no cached credentials existed; nothing was committed and trunk stayed at revision 3810386). Trunk is now `r3810399` and `tags/0.5.0` is `r3810400`.
+- Published state verified read-only: exporting `trunk` and `tags/0.5.0` gives 51 files each, byte-identical to the CI artifact; `downloads.wordpress.org/plugin/cerrojo-security-toolkit.0.5.0.zip` returns HTTP 200, 111754 bytes, and its extracted 51 files are identical to the artifact file by file (a different container hash is expected because WordPress.org repackages).
+- `api.wordpress.org` reports `version 0.5.0`, `requires 6.8`, `requires_php 8.1` and the 0.5.0 changelog text. It reports `tested 7.1.5` while every copy of the readme, including the published download, says `Tested up to: 7.1.4`. That discrepancy is on the directory side, not in this repository; the cause was not established here and no local change is implied.
 - Open follow-ups from the native review of the feature, deliberately not part of this release: the `$wpdb` guard could inspect `last_error` after the option deletions instead of documenting that a failed `delete_option()` is indistinguishable from an absent row; `CAST(... AS BINARY)` gives up the `option_name` index and is deprecated on MySQL 8.0.17+, so a future release should exercise the MySQL 8.4 matrix for the deprecation note.
 
 ## Log
