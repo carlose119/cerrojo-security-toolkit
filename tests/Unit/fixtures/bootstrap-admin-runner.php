@@ -161,6 +161,22 @@ function plugins_url(string $path = '', string $plugin = ''): string
     return 'https://example.test/wp-content/plugins/' . ltrim($path, '/');
 }
 
+$GLOBALS['bastion_stub_textdomains'] = [];
+
+function plugin_basename(string $file): string
+{
+    $normalized = str_replace('\\', '/', $file);
+
+    return basename(dirname($normalized)) . '/' . basename($normalized);
+}
+
+function load_plugin_textdomain(string $domain, bool|string $deprecated = false, string $plugin_rel_path = ''): bool
+{
+    $GLOBALS['bastion_stub_textdomains'][] = $domain . '|' . $plugin_rel_path;
+
+    return true;
+}
+
 function home_url(string $path = ''): string
 {
     return 'https://example.test' . $path;
@@ -490,8 +506,10 @@ $_GET['page'] = 'bastion-security-wp';
 \BastionSecurityWP\Bootstrap::boot();
 
 do_action('admin_menu');
+do_action('init');
 
 echo "BASTION_BOOTSTRAP_OK\n";
+echo 'BASTION_STUB_TEXTDOMAINS=' . implode(',', $GLOBALS['bastion_stub_textdomains']) . "\n";
 echo 'BASTION_STUB_OPTIONS=' . implode(',', array_keys($GLOBALS['bastion_stub_options'])) . "\n";
 echo 'BASTION_STUB_OPTION_WRITES=' . $GLOBALS['bastion_stub_option_writes'] . "\n";
 echo 'BASTION_STUB_SCHEDULED=' . json_encode($GLOBALS['bastion_stub_scheduled']) . "\n";

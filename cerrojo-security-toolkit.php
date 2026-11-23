@@ -9,6 +9,7 @@
  * Author:            Carlos Carrillo
  * License:           GPL-2.0-or-later
  * Text Domain:       cerrojo-security-toolkit
+ * Domain Path:       /languages
  */
 
 declare(strict_types=1);

@@ -51,6 +51,17 @@ final class BootstrapWiringTest extends TestCase
         self::assertStringNotContainsString('REST Exposure Findings', $output);
     }
 
+    public function testTheBundledCatalogueIsRegisteredFromThePluginDirectory(): void
+    {
+        $output = $this->runDashboard('headers');
+
+        self::assertMatchesRegularExpression(
+            '/^BASTION_STUB_TEXTDOMAINS=cerrojo-security-toolkit\|(?:[^,\r\n]+\/)?languages$/m',
+            $output,
+            'The text domain must be registered once, pointing at the bundled languages directory.',
+        );
+    }
+
     public function testIntegrityTabRendersTheTripwireFromTheProductionGraphWithTheDailyCronScheduledExactlyOnce(): void
     {
         $output = $this->runDashboard('integrity', enableIntegrity: true);

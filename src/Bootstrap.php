@@ -126,6 +126,21 @@ final class Bootstrap
             \add_action('update_option_home', $criticalSettingsAlertPolicy->onOptionUpdated(...), 10, 3);
             \add_action('update_option_siteurl', $criticalSettingsAlertPolicy->onOptionUpdated(...), 10, 3);
             \add_action('admin_menu', $dashboard->registerPage(...));
+            // The catalogue ships inside the plugin, so the domain has to point at it.
+            // Hooked on `init` because WordPress 6.7 and later report a domain loaded
+            // before that as loaded too early, and a bundled catalogue is worth nothing
+            // if loading it raises a notice on every request.
+            \add_action('init', static function (): void {
+                if (! function_exists('load_plugin_textdomain') || ! function_exists('plugin_basename')) {
+                    return;
+                }
+
+                \load_plugin_textdomain(
+                    'cerrojo-security-toolkit',
+                    false,
+                    dirname(\plugin_basename(dirname(__DIR__) . '/cerrojo-security-toolkit.php')) . '/languages',
+                );
+            });
             \add_action('admin_post_' . FileEditorAdmin::POST_ACTION, $fileEditorAdmin->handleRequest(...));
             \add_action('admin_post_' . LoginProtectionAdmin::POST_ACTION, $loginProtectionAdmin->handleRequest(...));
             \add_action('admin_post_' . XmlRpcPingbackAdmin::POST_ACTION, $xmlRpcPingbackAdmin->handleRequest(...));

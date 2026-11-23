@@ -123,6 +123,8 @@ try {
     copyTree($root . '/src', $stage . '/src', $root);
     mkdir($stage . '/assets');
     copyTree($root . '/assets', $stage . '/assets', $root);
+    mkdir($stage . '/languages');
+    copyTree($root . '/languages', $stage . '/languages', $root);
 
     $composer = getenv('COMPOSER_BINARY') ?: '';
 
