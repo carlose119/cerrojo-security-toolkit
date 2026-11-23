@@ -291,6 +291,20 @@ Cerrojo includes no public mutation endpoint, user-authored regex/wildcard/names
 
 Compatibility is a validation target, not a claim that unsupported upstream combinations are safe.
 
+## Translations
+
+Cerrojo ships a neutral Spanish (`es_ES`) catalogue in `languages/`: `cerrojo-security-toolkit-es_ES.po` with its compiled `cerrojo-security-toolkit-es_ES.mo`, loaded on `init` from the plugin's own directory. A site whose locale is `es_ES` reads the bundled catalogue; for any other Spanish locale, a translation served by WordPress.org takes precedence when one exists, so the bundled file is a fallback, never an override.
+
+The template comes from the source, not from a hand-maintained list:
+
+```shell
+php tools/make-pot.php
+msgfmt --check -o /dev/null languages/cerrojo-security-toolkit-es_ES.po
+msgfmt -o languages/cerrojo-security-toolkit-es_ES.mo languages/cerrojo-security-toolkit-es_ES.po
+```
+
+A test enforces that the catalogue translates every string the extractor finds, that no entry is left fuzzy or empty, and that no translation drops or invents a placeholder. Translation is never a licence to soften a claim: a Spanish string that states a limit has to state the same limit.
+
 ## Development
 
 Run commands from this plugin directory:
