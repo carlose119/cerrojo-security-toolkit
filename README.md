@@ -1,6 +1,6 @@
 # Cerrojo Security Toolkit
 
-Cerrojo Security Toolkit provides focused WordPress security posture diagnostics and eight reversible security tools: six under **Hardening**, plus dedicated **Security headers** and **REST API** tools. It reports evidence, not a guarantee of invulnerability.
+Cerrojo Security Toolkit provides focused WordPress security posture diagnostics and nine security tools: six under **Hardening**, plus dedicated **File integrity**, **Security headers**, and **REST API** tools. It reports evidence, not a guarantee of invulnerability.
 
 Available on [WordPress.org](https://wordpress.org/plugins/cerrojo-security-toolkit/).
 
@@ -16,6 +16,7 @@ Open **Tools > Cerrojo Security Toolkit** as an administrator with `manage_optio
 | **Hardening** | Six reversible tools: the WordPress file-editor lock, Login Protection, XML-RPC Pingback Protection, plugin activity email alerts, Administrator Account Alerts, and URL Change Alerts. |
 | **Security headers** | Baseline and optional policy state, selected batch actions, individual controls, coverage guidance, and rollback. |
 | **REST API** | Active registered route-template catalog, method checkboxes, selected/stale state, impact guidance, and clear-all rollback. |
+| **File integrity** | The file change tripwire: bounded baseline of watched code files, delta report, alert recipients, acknowledgement controls, and last-cycle outcome. |
 
 Only the active tab is rendered. Unknown or malformed tab values fall back to **Overview**.
 
@@ -193,6 +194,27 @@ A changed raw string is the event condition, even when its redacted or truncated
 
 Cerrojo makes one plain-text `wp_mail` attempt per configured recipient. An attempt does not prove delivery. Cerrojo keeps and shows only the observed result of the most recent attempt, with its recorded date, and overwrites it on the next attempt. Mail failures do not block the WordPress setting update, and Cerrojo performs no automatic rollback. Disabling alerts preserves recipients for a later re-enable and stops future attempts; it cannot recall email already handed to the mail transport.
 
+### File change tripwire
+
+The file change tripwire lives under **Tools > Cerrojo Security Toolkit > File integrity**. It is opt-in per site: select **Enable file change email alerts**, enter at least one recipient separated by commas or new lines, and save. Every recipient must be a valid email address or Cerrojo rejects the whole write. Disabling preserves recipients and clears the scheduled daily check.
+
+What it watches and reports:
+
+- Watched surfaces are the PHP files (including `phtml`, `php5`, `php7`, `php8`, and `inc`) under `wp-content/plugins`, `wp-content/mu-plugins`, and `wp-content/themes`. `uploads/`, WordPress core files, and other content are never watched.
+- **Run a check now** performs one bounded capture and compares it with the stored baseline, reporting files **added**, **changed**, or **removed** since that baseline. If no baseline exists, the first cycle creates one from the current scan and alerts nobody.
+- **Capture a new baseline** replaces the stored baseline with a fresh scan; finding reports against the replaced baseline stop, so capture deliberately, for example after reviewing and accepting the current files.
+- One alert is attempted per change until that exact change (identified by path and its current hash) is acknowledged. **Acknowledge reported changes** marks every finding listed for the last cycle as known; **Forget acknowledgements** clears them so every current change alerts again. Acknowledging states that you reviewed a change and consider it expected; it is not a statement that the file is safe.
+
+Honest limits:
+
+- This is a tripwire, not an integrity guarantee. A change is not proof of a compromise, and a report with no findings is not proof that the site is clean.
+- Cerrojo never writes, moves, deletes, quarantines, or repairs a watched file and never uploads content.
+- The scan is bounded (both files per capture and per-file size), so a large site can be covered partially. The panel states when coverage was incomplete, and a file whose contents Cerrojo could not read is reported as unverifiable, never as matching the baseline.
+- Delivery depends on the site's mail transport. An accepted message is not proven delivery, and a failed send stays unacknowledged and is retried on the next cycle.
+- The panel shows the outcome of the cycle that Cerrojo stored. Nothing else that changed on the site outside the three watched surfaces is covered by this tool.
+
+While tripwire alerting is enabled, Cerrojo registers exactly one scheduled task: a daily check that runs the same bounded cycle. Disabling the tool clears that schedule.
+
 ### HTTP security-header policies
 
 Cerrojo provides one backward-compatible baseline toggle and seven independent optional groups. All optional groups are **off by default**. They remain independent of the baseline, and the UI provides both selected batch actions and individual controls.
@@ -260,7 +282,7 @@ The diff is bounded and structural. It compares at most the first 500 sorted rou
 
 ## Explicit non-goals
 
-Cerrojo includes no public mutation endpoint, user-authored regex/wildcard/namespace-prefix REST policy, global REST shutdown, route removal, file integrity monitoring, general audit log, cron tasks, filesystem writes, permanent login locks, or allowlists. Alerting is limited to three independent, opt-in tools described above: plugin installation/activation notices, administrator account lifecycle notices, and URL Change Alerts. The settings UI and database writes are limited to the Tools page and plugin-owned file-editor preference, Login Protection configuration/metrics/transients, plugin activity alert configuration, Administrator Account Alerts configuration, URL Change Alert configuration, XML-RPC pingback preference, REST Route Controls rules, header baseline, and enabled-group state. Administrator Account Alerts add no enforcement, role blocking, account rollback, logs, counters, history, retries, queues, REST/AJAX/cron endpoints, network settings, IP capture, or user-agent capture. Mutations require WordPress administrative capability, strict target allowlists, and target-bound nonce protections; there is no AJAX or REST mutation path.
+Cerrojo includes no public mutation endpoint, user-authored regex/wildcard/namespace-prefix REST policy, global REST shutdown, route removal, general audit log, filesystem writes, permanent login locks, or allowlists. Alerting is limited to four independent, opt-in tools described above: plugin installation/activation notices, administrator account lifecycle notices, URL Change Alerts, and file change tripwire alerts. The settings UI and database writes are limited to the Tools page and the plugin-owned file-editor preference, Login Protection configuration/metrics/transients, plugin activity alert configuration, Administrator Account Alerts configuration, URL Change Alert configuration, XML-RPC pingback preference, REST Route Controls rules, header baseline, enabled-group state, and the file change tripwire configuration, baseline, and last result. Cerrojo registers exactly one scheduled task, the daily file change tripwire check, and only while tripwire alerting is enabled. Administrator Account Alerts add no enforcement, role blocking, account rollback, logs, counters, history, retries, queues, REST/AJAX/cron endpoints, network settings, IP capture, or user-agent capture. Mutations require WordPress administrative capability, strict target allowlists, and target-bound nonce protections; there is no AJAX or REST mutation path.
 
 ## Compatibility target
 
@@ -307,9 +329,10 @@ For release validation and deployment, extract the production ZIP first. Run Wor
 - **Plugin activity email alerts:** open **Tools > Cerrojo Security Toolkit > Hardening**, clear the enable checkbox, and save. Disabling preserves recipients and stops future attempts; already handed-off email cannot be recalled.
 - **Administrator Account Alerts:** open **Tools > Cerrojo Security Toolkit > Hardening**, clear the enable checkbox, and save. Disabling preserves recipients and stops future attempts; it does not reverse account changes or recall handed-off email. Delete `bastion_security_wp_administrator_account_alerts` to remove this saved configuration.
 - **URL Change Alerts:** open **Tools > Cerrojo Security Toolkit > Hardening**, clear the enable checkbox, and save. Disabling preserves recipients and stops future mail attempts; it does not roll back a WordPress URL update or recall handed-off email. Delete `bastion_security_wp_critical_settings_alerts` to remove this saved configuration.
-- **Plugin:** deactivate Cerrojo to remove its thirteen Site Health tests and future runtime enforcement and alert attempts. Plugin-owned configuration, metrics, and transient state remain in the database for later reactivation. Deleting the plugin runs its uninstall routine, which removes the fourteen options Cerrojo stores and, where the site keeps transients as options rows, the temporary login-protection blocks it created; it removes nothing it does not own. With a persistent object cache those blocks are cache entries and expire with their own timeout instead. The routine runs against the site WordPress is uninstalling the plugin from, and the plugin writes no network options. When another copy of the plugin is already loaded from a different directory, it removes nothing and reports it, because that state belongs to the running copy. Transient deletion is bounded to twenty statements of 500 rows plus one confirming statement, and reports when it stops there, which only happens with more than ten thousand matching temporary rows waiting at once.
+- **File change tripwire:** open **Tools > Cerrojo Security Toolkit > File integrity**, clear the enable checkbox, and save. Disabling preserves recipients, clears the scheduled daily check, and stops future mail attempts; it cannot recall handed-off email. **Forget acknowledgements** makes every current change alert again, and **Capture a new baseline** replaces the stored baseline. Delete the `bastion_security_wp_file_integrity_alerts`, `bastion_security_wp_file_integrity_baseline`, and `bastion_security_wp_file_integrity_alert_result` options to remove the saved configuration completely.
+- **Plugin:** deactivate Cerrojo to remove its thirteen Site Health tests and future runtime enforcement and alert attempts. Plugin-owned configuration, metrics, and transient state remain in the database for later reactivation. Deleting the plugin runs its uninstall routine, which removes the seventeen options Cerrojo stores and, where the site keeps transients as options rows, the temporary login-protection blocks it created; it removes nothing it does not own. With a persistent object cache those blocks are cache entries and expire with their own timeout instead. The routine runs against the site WordPress is uninstalling the plugin from, and the plugin writes no network options. When another copy of the plugin is already loaded from a different directory, it removes nothing and reports it, because that state belongs to the running copy. Transient deletion is bounded to twenty statements of 500 rows plus one confirming statement, and reports when it stops there, which only happens with more than ten thousand matching temporary rows waiting at once.
 
-Cerrojo creates no cron, queue, audit-log, or filesystem state requiring cleanup. Login Protection transients are temporary and best-effort.
+Cerrojo creates no queue, audit-log, or filesystem state requiring cleanup. Its only scheduled task is the daily file change tripwire check, registered only while tripwire alerting is enabled and cleared when alerting is disabled. Login Protection transients are temporary and best-effort.
 
 ## License
 

@@ -26,6 +26,7 @@ Current tools include:
 * URL Change Alerts for supported successful local WordPress Address and Site Address updates.
 * Selective REST API blocking by HTTP method and registered route template. Matching rules apply to all callers, including administrators and authenticated integrations.
 * Structural REST exposure findings: each registered route handler is classified by its registered permission callback, including the routes with no effective check, plus a baseline diff of routes added, removed, or changed in exposure class since the baseline was captured. Cerrojo never invokes a permission callback to classify it.
+* A file change tripwire: the PHP files of plugins, mu-plugins and themes are compared against a stored baseline; files added, changed or removed are reported by email and in the panel until each change is acknowledged.
 
 Controls are designed to be reviewed, enabled, verified, and reversed individually. Coverage depends on the WordPress hooks and serving paths described in each tool. Login throttling is best-effort, email delivery depends on the site's mail transport, and headers must be verified at every cache, proxy, CDN, and origin edge.
 
@@ -55,6 +56,12 @@ Yes. The settings UI provides controls to disable or clear plugin-managed polici
 
 Every caller whose request matches the selected HTTP method and registered route template. There are no administrator, capability, cookie, or Application Password exemptions.
 
+= What does the file change tripwire watch? =
+
+The tripwire is configured under Tools > Cerrojo Security Toolkit > File integrity. It compares the PHP files under wp-content/plugins, wp-content/mu-plugins, and wp-content/themes with a stored baseline and reports files that are added, changed, or removed. One alert is attempted per change until that exact change is acknowledged; acknowledging tells Cerrojo you reviewed a change, it does not certify the file as safe, and the "Forget acknowledgements" command clears every acknowledgement so every current change alerts again.
+
+The honest limits: uploads, WordPress core files, and non-PHP files are not watched; Cerrojo never repairs, quarantines, or deletes anything and never uploads content. The scan is bounded, so a large site can be covered partially and the panel states incomplete coverage, including files that could not be read, which are unverifiable rather than matching the baseline. A report with no findings is not proof that the site is clean. Delivery depends on the site's mail transport: an accepted message is not proven delivery, and a failed send is retried on the next cycle until the change is acknowledged.
+
 = What do URL Change Alerts observe? =
 
 URL Change Alerts are independently opt-in under Tools > Cerrojo Security Toolkit > Hardening. Enable the tool, enter one to 50 valid recipient addresses separated by commas or new lines, and save. There is no administrator-email fallback and no reuse of recipients from another alert tool. Disabling preserves recipients for a later re-enable.
@@ -65,7 +72,7 @@ A changed raw string is observed even when redaction or truncation makes the dis
 
 = Does uninstalling remove saved data? =
 
-Yes. Deleting the plugin runs a cleanup routine that removes the fourteen options Cerrojo stores: its tool configuration, its login-protection metrics, the last observed alert result of each alert tool, and the REST surface baseline. It also removes the temporary login-protection blocks Cerrojo created, when the site stores transients as options rows. On a site with a persistent object cache those blocks are cache entries rather than options rows, so they are not removed and expire with their own timeout, which is at most 30 minutes. The transient deletion is bounded: at most twenty statements of 500 rows plus one confirming statement, and it reports when it stops there, a case only reachable when more than ten thousand matching temporary rows are waiting at once. Nothing else is removed, because the routine only deletes keys Cerrojo owns. It runs against the site WordPress is uninstalling the plugin from, and the plugin writes no network options. When another copy of the plugin is already loaded from a different directory, the routine removes nothing and reports it, because that state belongs to the copy that is running. Deactivating the plugin keeps all of this so a later reactivation finds its configuration intact.
+Yes. Deleting the plugin runs a cleanup routine that removes the seventeen options Cerrojo stores: its tool configuration, its login-protection metrics, the last observed alert result of each alert tool, and the REST surface and file-integrity baselines. It also removes the temporary login-protection blocks Cerrojo created, when the site stores transients as options rows. On a site with a persistent object cache those blocks are cache entries rather than options rows, so they are not removed and expire with their own timeout, which is at most 30 minutes. The transient deletion is bounded: at most twenty statements of 500 rows plus one confirming statement, and it reports when it stops there, a case only reachable when more than ten thousand matching temporary rows are waiting at once. Nothing else is removed, because the routine only deletes keys Cerrojo owns. It runs against the site WordPress is uninstalling the plugin from, and the plugin writes no network options. When another copy of the plugin is already loaded from a different directory, the routine removes nothing and reports it, because that state belongs to the copy that is running. Deactivating the plugin keeps all of this so a later reactivation finds its configuration intact.
 
 == Changelog ==
 
