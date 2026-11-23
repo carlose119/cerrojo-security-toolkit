@@ -105,6 +105,11 @@ final class FileIntegrityAlertPolicy
     /**
      * Enable or disable alerting and replace the recipient list.
      *
+     * The list is comma or newline separated, as the panel and README say. One
+     * invalid entry rejects the whole write: quietly enabling alerting with the
+     * addresses that happened to parse would leave the administrator believing
+     * every address they typed is watched.
+     *
      * @return string enabled|disabled|unchanged|invalid_recipients|recipients_required|write_failed
      */
     public function setConfiguration(bool $enabled, string $recipientInput): string
@@ -112,7 +117,7 @@ final class FileIntegrityAlertPolicy
         $config = $this->readConfiguration();
         $parsed = self::parseRecipients($recipientInput);
 
-        if ($parsed['invalid'] > 0 && $parsed['recipients'] === []) {
+        if ($parsed['invalid'] > 0) {
             return 'invalid_recipients';
         }
 
@@ -556,7 +561,8 @@ final class FileIntegrityAlertPolicy
         $recipients = [];
         $invalid = 0;
 
-        foreach (explode(',', $input) as $candidate) {
+        $candidates = preg_split('/[\r\n,]+/', $input);
+        foreach (is_array($candidates) ? $candidates : [] as $candidate) {
             $candidate = trim($candidate);
             if ($candidate === '') {
                 continue;

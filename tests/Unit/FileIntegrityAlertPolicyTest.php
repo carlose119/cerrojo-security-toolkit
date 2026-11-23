@@ -115,7 +115,9 @@ final class FileIntegrityAlertPolicyTest extends TestCase
         $policy = $this->policy([], enabled: false, mails: $mails);
 
         self::assertSame('recipients_required', $policy->setConfiguration(true, '   '));
-        self::assertSame('enabled', $policy->setConfiguration(true, 'a@example.test, not-an-email, c@example.test'));
+        self::assertSame('invalid_recipients', $policy->setConfiguration(true, 'a@example.test, not-an-email'), 'One invalid entry must reject the write instead of silently dropping the address.');
+        self::assertSame([], $policy->state()['recipients'], 'A rejected write must store nothing.');
+        self::assertSame('enabled', $policy->setConfiguration(true, "a@example.test\nc@example.test"), 'The panel and README document newline separated recipients, so they must be accepted.');
         self::assertSame(['a@example.test', 'c@example.test'], $policy->state()['recipients']);
         self::assertSame('unchanged', $policy->setConfiguration(true, 'a@example.test,c@example.test'));
         self::assertSame('disabled', $policy->setConfiguration(false, 'a@example.test'));

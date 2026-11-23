@@ -170,6 +170,31 @@ final class FileIntegrityScannerTest extends TestCase
         self::assertSame([], $result['unreadable']);
     }
 
+    public function testAFileWhoseSizeCannotBeReadIsUnverifiableAndNotASizeSkip(): void
+    {
+        $root = $this->tempTree();
+        $this->write($root, 'plugins/ghost/ghost.php', '<?php ghost;');
+
+        $result = $this->makeScanner($root, sizeOf: static fn (string $path): int|false => false)->scan();
+
+        self::assertArrayNotHasKey('plugins/ghost/ghost.php', $result['files']);
+        self::assertSame(['plugins/ghost/ghost.php'], $result['unreadable'], 'A file that cannot be statted cannot be hashed either.');
+        self::assertSame([], $result['skipped'], 'It did not exceed a size bound, so it must not be described as one.');
+    }
+
+    public function testAWalkerPathThatClimbsOutOfItsSurfaceIsDropped(): void
+    {
+        $root = $this->tempTree();
+        $this->write($root, 'outside/secret.php', '<?php secret;');
+
+        $result = $this->makeScanner($root, walker: static fn (string $directory): array => [
+            $directory . '/../../../outside/secret.php',
+        ])->scan();
+
+        self::assertSame([], $result['files'], 'A walked path with a traversal segment is not inside the surface it claims.');
+        self::assertSame(0, $result['total']);
+    }
+
     public function testAFileWhoseHashCannotBeReadIsReportedAsUnverifiableNeverAsUnchangedOrEmpty(): void
     {
         $root = $this->tempTree();

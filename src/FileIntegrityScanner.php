@@ -118,7 +118,14 @@ final class FileIntegrityScanner
             $kept = array_slice($candidates, 0, self::MAX_FILES, true);
             foreach ($kept as $relative => $path) {
                 $size = ($this->sizeOf)($path);
-                if (! is_int($size) || $size < 0 || $size > self::MAX_FILE_BYTES) {
+                if (! is_int($size) || $size < 0) {
+                    // A candidate whose size cannot be read cannot be hashed either: it is
+                    // unverifiable, not a file that merely exceeded the size bound.
+                    $unreadable[] = (string) $relative;
+                    continue;
+                }
+
+                if ($size > self::MAX_FILE_BYTES) {
                     $skipped[] = (string) $relative;
                     continue;
                 }
@@ -173,7 +180,18 @@ final class FileIntegrityScanner
             return null;
         }
 
-        return str_replace('\\', '/', substr($path, strlen($prefix)));
+        $relative = str_replace('\\', '/', substr($path, strlen($prefix)));
+
+        // A prefix test alone would accept a walked path that climbs back out with
+        // `..` segments. Every segment has to be a real name for the path to be
+        // inside the surface it claims.
+        foreach (explode('/', $relative) as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                return null;
+            }
+        }
+
+        return $relative;
     }
 
     /**
