@@ -6,6 +6,7 @@ namespace BastionSecurityWP;
 
 use BastionSecurityWP\Admin\AdministratorAccountAlertAdmin;
 use BastionSecurityWP\Admin\CriticalSettingsAlertAdmin;
+use BastionSecurityWP\Admin\FileIntegrityAdmin;
 use BastionSecurityWP\Admin\RestRouteControlsAdmin;
 use BastionSecurityWP\Admin\FileEditorAdmin;
 use BastionSecurityWP\Admin\LoginProtectionAdmin;
@@ -18,10 +19,14 @@ use BastionSecurityWP\Security\AdministratorAccountAlertPolicy;
 use BastionSecurityWP\Security\CriticalSettingsAlertPolicy;
 use BastionSecurityWP\Security\RestRouteControlsPolicy;
 use BastionSecurityWP\Security\FileEditorPolicy;
+use BastionSecurityWP\Security\FileIntegrityAlertPolicy;
 use BastionSecurityWP\Security\LoginProtectionPolicy;
 use BastionSecurityWP\Security\PluginActivityAlertPolicy;
 use BastionSecurityWP\Security\SecurityHeadersPolicy;
 use BastionSecurityWP\Security\XmlRpcPingbackPolicy;
+
+use BastionSecurityWP\FileIntegrityBaseline;
+use BastionSecurityWP\FileIntegrityScanner;
 
 final class Bootstrap
 {
@@ -88,6 +93,16 @@ final class Bootstrap
             // The exposure panel is an advertisement in readme.txt: without this
             // wiring it renders nothing and its capture/clear actions are dead.
             $restExposurePanel = new RestExposurePanel($restSurfaceSnapshot);
+            // The tripwire shares one scanner between the policy and the panel, and
+            // holds the baseline the panel captures into.
+            $fileIntegrityScanner = new FileIntegrityScanner();
+            $fileIntegrityBaseline = new FileIntegrityBaseline();
+            $fileIntegrityPolicy = new FileIntegrityAlertPolicy($fileIntegrityBaseline, $fileIntegrityScanner->scan(...));
+            $fileIntegrityAdmin = new FileIntegrityAdmin(
+                $fileIntegrityPolicy,
+                $fileIntegrityBaseline,
+                $fileIntegrityScanner->scan(...),
+            );
             $dashboard = new SecurityDashboard(
                 $siteHealth,
                 $fileEditorAdmin,
@@ -99,6 +114,7 @@ final class Bootstrap
                 $administratorAccountAlertAdmin,
                 criticalSettingsAlertAdmin: $criticalSettingsAlertAdmin,
                 restExposurePanel: $restExposurePanel,
+                fileIntegrityAdmin: $fileIntegrityAdmin,
             );
             \add_action('wp_login_failed', $loginProtectionPolicy->recordFailure(...), 10, 2);
             \add_action('wp_login', $loginProtectionPolicy->recordSuccess(...), 10, 2);
@@ -118,6 +134,18 @@ final class Bootstrap
             \add_action('admin_post_' . AdministratorAccountAlertAdmin::POST_ACTION, $administratorAccountAlertAdmin->handleRequest(...));
             \add_action('admin_post_' . CriticalSettingsAlertAdmin::POST_ACTION, $criticalSettingsAlertAdmin->handleRequest(...));
             \add_action('admin_post_' . SecurityHeadersAdmin::POST_ACTION, $securityHeadersAdmin->handleRequest(...));
+            \add_action('admin_post_' . FileIntegrityAdmin::POST_ACTION, $fileIntegrityAdmin->handleRequest(...));
+            \add_action(FileIntegrityAdmin::CRON_HOOK, $fileIntegrityPolicy->check(...));
+            // The daily cycle exists only while tripwire alerting is enabled; disabling
+            // it through the panel clears the scheduled hook again.
+            if (
+                $fileIntegrityPolicy->isEnabled()
+                && \function_exists('wp_next_scheduled')
+                && \function_exists('wp_schedule_event')
+                && \wp_next_scheduled(FileIntegrityAdmin::CRON_HOOK) === false
+            ) {
+                \wp_schedule_event((int) \wp_next_scheduled(FileIntegrityAdmin::CRON_HOOK) ?: \time(), 'daily', FileIntegrityAdmin::CRON_HOOK);
+            }
         }
     }
 }

@@ -59,6 +59,13 @@ namespace {
         }
     }
 
+    if (! function_exists('admin_url')) {
+        function admin_url(string $path = ''): string
+        {
+            return 'https://example.test/wp-admin/' . $path;
+        }
+    }
+
     if (! function_exists('add_management_page')) {
         function add_management_page(string $pageTitle, string $menuTitle, string $capability, string $menuSlug, callable $callback): string
         {
@@ -125,6 +132,7 @@ namespace {
 namespace BastionSecurityWP\Tests\Unit {
     use BastionSecurityWP\Admin\AdministratorAccountAlertAdmin;
     use BastionSecurityWP\Admin\CriticalSettingsAlertAdmin;
+    use BastionSecurityWP\Admin\FileIntegrityAdmin;
     use BastionSecurityWP\Admin\RestRouteControlsAdmin;
     use BastionSecurityWP\Admin\RestExposurePanel;
     use BastionSecurityWP\Admin\FileEditorAdmin;
@@ -144,13 +152,15 @@ namespace BastionSecurityWP\Tests\Unit {
     use BastionSecurityWP\RestRouteCatalog;
     use BastionSecurityWP\RestSurfaceSnapshot;
     use BastionSecurityWP\SiteHealthDiagnostics;
+    use BastionSecurityWP\FileIntegrityBaseline;
+    use BastionSecurityWP\Security\FileIntegrityAlertPolicy;
     use PHPUnit\Framework\TestCase;
 
     final class SecurityDashboardTest extends TestCase
     {
         protected function tearDown(): void
         {
-            unset($_GET['tab'], $_GET['bastion_notice'], $_GET['bastion_login_notice'], $_GET['bastion_xmlrpc_pingback_notice'], $_GET['bastion_rest_route_controls_notice'], $_GET['bastion_plugin_alert_notice'], $_GET['bastion_administrator_alert_notice'], $_GET[CriticalSettingsAlertAdmin::NOTICE_QUERY]);
+            unset($_GET['tab'], $_GET['bastion_notice'], $_GET['bastion_login_notice'], $_GET['bastion_xmlrpc_pingback_notice'], $_GET['bastion_rest_route_controls_notice'], $_GET['bastion_plugin_alert_notice'], $_GET['bastion_administrator_alert_notice'], $_GET[CriticalSettingsAlertAdmin::NOTICE_QUERY], $_GET[FileIntegrityAdmin::NOTICE_QUERY]);
             unset($GLOBALS['bastion_admin_page_callbacks'], $GLOBALS['bastion_admin_hooks'], $GLOBALS['bastion_enqueued_styles']);
         }
 
@@ -173,17 +183,19 @@ namespace BastionSecurityWP\Tests\Unit {
         public function testTabsUseNativeMarkupAndOnlyRenderTheActivePanel(): void
         {
             $overview = $this->renderTab('overview');
-            self::assertSame(4, substr_count($overview, '<a class="nav-tab'));
+            self::assertSame(5, substr_count($overview, '<a class="nav-tab'));
             self::assertStringContainsString('class="nav-tab-wrapper" aria-label="Cerrojo Security Toolkit sections"', $overview);
             self::assertStringContainsString('tab=overview', $overview);
             self::assertStringContainsString('tab=hardening', $overview);
             self::assertStringContainsString('tab=headers', $overview);
             self::assertStringContainsString('tab=rest-api', $overview);
+            self::assertStringContainsString('tab=integrity', $overview);
             self::assertMatchesRegularExpression('/<a class="nav-tab nav-tab-active"[^>]+aria-current="page">/', $overview);
             self::assertSame(13, substr_count($overview, '<details class="bastion-diagnostic">'));
             self::assertStringNotContainsString('WordPress file editor lock', $overview);
             self::assertStringNotContainsString('URL Change Alerts', $overview);
             self::assertStringNotContainsString('HTTP security header preset', $overview);
+            self::assertStringNotContainsString('File change tripwire', $overview);
 
             $hardening = $this->renderTab('hardening');
             self::assertStringContainsString('WordPress file editor lock', $hardening);
@@ -199,12 +211,14 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertTrue(strpos($hardening, 'Plugin activity email alerts') < strpos($hardening, 'Administrator account alerts'));
             self::assertStringNotContainsString('<summary class="bastion-diagnostic-summary">', $hardening);
             self::assertStringNotContainsString('HTTP security header preset', $hardening);
+            self::assertStringNotContainsString('File change tripwire', $hardening);
 
             $headers = $this->renderTab('headers');
             self::assertStringContainsString('HTTP security header policies', $headers);
             self::assertStringNotContainsString('<summary class="bastion-diagnostic-summary">', $headers);
             self::assertStringNotContainsString('WordPress file editor lock', $headers);
             self::assertStringNotContainsString('URL Change Alerts', $headers);
+            self::assertStringNotContainsString('File change tripwire', $headers);
 
             $restApi = $this->renderTab('rest-api');
             self::assertStringContainsString('REST Route Controls', $restApi);
@@ -212,6 +226,59 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringNotContainsString('WordPress file editor lock', $restApi);
             self::assertStringNotContainsString('URL Change Alerts', $restApi);
             self::assertStringNotContainsString('HTTP security header policies', $restApi);
+            self::assertStringNotContainsString('File change tripwire', $restApi);
+        }
+
+        public function testIntegrityTabRendersTheTripwireAfterTheIntroductionAndOnlyThere(): void
+        {
+            $store = [
+                'scans' => 0,
+                FileIntegrityAlertPolicy::OPTION_NAME => [
+                    'schema' => 1,
+                    'enabled' => true,
+                    'recipients' => ['one@example.test'],
+                    'known' => [],
+                ],
+            ];
+            $policy = new FileIntegrityAlertPolicy(
+                new FileIntegrityBaseline(
+                    readOption: static fn (): mixed => $store[FileIntegrityBaseline::OPTION_NAME] ?? null,
+                    writeOption: static function (array $value) use (&$store): bool { $store[FileIntegrityBaseline::OPTION_NAME] = $value; return true; },
+                    deleteOption: static function () use (&$store): bool { unset($store[FileIntegrityBaseline::OPTION_NAME]); return true; },
+                ),
+                static function () use (&$store): array { $store['scans'] = ($store['scans'] ?? 0) + 1; return []; },
+                readOption: static fn (string $name): mixed => $store[$name] ?? null,
+                writeOption: static function (string $name, array $value) use (&$store): bool {
+                    $store['writes'] = ($store['writes'] ?? 0) + 1;
+                    $store[$name] = $value;
+
+                    return true;
+                },
+            );
+            $admin = new FileIntegrityAdmin(
+                $policy,
+                new FileIntegrityBaseline(
+                    readOption: static fn (): mixed => $store[FileIntegrityBaseline::OPTION_NAME] ?? null,
+                ),
+                static function () use (&$store): array { $store['scans'] = ($store['scans'] ?? 0) + 1; return []; },
+                static fn (string $capability): bool => $capability === 'manage_options',
+                static fn (): bool => true,
+                static fn (string $action): string => '<input type="hidden" name="_wpnonce" value="nonce">',
+            );
+
+            $integrity = $this->renderTab('integrity', integrityAdmin: $admin);
+            self::assertStringContainsString('File change tripwire', $integrity);
+            self::assertStringContainsString('name="command" value="check"', $integrity);
+            self::assertTrue(
+                strpos($integrity, 'bastion-tab-introduction') < strpos($integrity, 'File change tripwire'),
+                'The tripwire section must render after the tab introduction.',
+            );
+            self::assertSame(0, $store['writes'] ?? 0, 'Rendering the tab must not write.');
+            self::assertSame(0, $store['scans'], 'Rendering the tab must never scan.');
+
+            foreach (['overview', 'hardening', 'headers', 'rest-api'] as $tab) {
+                self::assertStringNotContainsString('File change tripwire', $this->renderTab($tab, integrityAdmin: $admin));
+            }
         }
 
         public function testOnlyRestApiTabLoadsTheActiveCatalog(): void
@@ -509,11 +576,11 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringNotContainsString('<style>', $dashboard);
         }
 
-        private function renderTab(string $tab, ?RestExposurePanel $panel = null): string
+        private function renderTab(string $tab, ?RestExposurePanel $panel = null, ?FileIntegrityAdmin $integrityAdmin = null): string
         {
             $_GET['tab'] = $tab;
             ob_start();
-            $this->dashboard(restExposurePanel: $panel)->render();
+            $this->dashboard(restExposurePanel: $panel, fileIntegrityAdmin: $integrityAdmin)->render();
 
             return (string) ob_get_clean();
         }
@@ -527,6 +594,7 @@ namespace BastionSecurityWP\Tests\Unit {
             bool $authorized = true,
             ?array &$observations = null,
             ?RestExposurePanel $restExposurePanel = null,
+            ?FileIntegrityAdmin $fileIntegrityAdmin = null,
         ): SecurityDashboard {
             $values = [
                 'wp_debug' => false,
@@ -685,6 +753,7 @@ namespace BastionSecurityWP\Tests\Unit {
                 $sanitize ?? static fn (string $html): string => strip_tags($html, '<p><strong><a>'),
                 criticalSettingsAlertAdmin: $criticalSettingsAlertAdmin,
                 restExposurePanel: $restExposurePanel,
+                fileIntegrityAdmin: $fileIntegrityAdmin,
             );
         }
     }

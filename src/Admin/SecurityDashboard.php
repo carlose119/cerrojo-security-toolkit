@@ -12,7 +12,7 @@ final class SecurityDashboard
     private const CAPABILITY = 'manage_options';
 
     /** @var list<string> */
-    private const TABS = ['overview', 'hardening', 'headers', 'rest-api'];
+    private const TABS = ['overview', 'hardening', 'headers', 'rest-api', 'integrity'];
 
     private Closure $currentUserCan;
     private Closure $adminUrl;
@@ -32,6 +32,7 @@ final class SecurityDashboard
         ?callable $sanitizeHtml = null,
         private readonly ?CriticalSettingsAlertAdmin $criticalSettingsAlertAdmin = null,
         private readonly ?RestExposurePanel $restExposurePanel = null,
+        private readonly ?FileIntegrityAdmin $fileIntegrityAdmin = null,
     ) {
         $this->currentUserCan = Closure::fromCallable($currentUserCan ?? static fn (string $capability): bool => \current_user_can($capability));
         $this->adminUrl = Closure::fromCallable($adminUrl ?? static fn (string $path): string => \admin_url($path));
@@ -77,6 +78,7 @@ final class SecurityDashboard
         $pluginAlertNotice = $this->queryToken('bastion_plugin_alert_notice');
         $administratorAlertNotice = $this->queryToken('bastion_administrator_alert_notice');
         $criticalSettingsAlertNotice = $this->queryToken(CriticalSettingsAlertAdmin::NOTICE_QUERY);
+        $fileIntegrityNotice = $this->queryToken(FileIntegrityAdmin::NOTICE_QUERY);
 
         echo '<div class="wrap bastion-security-dashboard"><h1>' . \esc_html__('Cerrojo Security Toolkit', 'cerrojo-security-toolkit') . '</h1>';
         $this->renderTabs($tab);
@@ -98,6 +100,9 @@ final class SecurityDashboard
             echo '<p class="bastion-tab-introduction">' . \esc_html__('Review the active REST route-template catalog and choose method-level blocks.', 'cerrojo-security-toolkit') . '</p>';
             $this->restRouteControlsAdmin->renderCatalog($restRouteControlsNotice);
             $this->restExposurePanel?->renderToolSection();
+        } elseif ($tab === 'integrity') {
+            echo '<p class="bastion-tab-introduction">' . \esc_html__('Watch the executable code of plugins, mu-plugins and themes for additions, removals and changes against a stored baseline.', 'cerrojo-security-toolkit') . '</p>';
+            $this->fileIntegrityAdmin?->renderToolSection($fileIntegrityNotice);
         } else {
             $this->renderOverview();
         }
@@ -166,6 +171,7 @@ final class SecurityDashboard
             'hardening' => \esc_html__('Hardening', 'cerrojo-security-toolkit'),
             'headers' => \esc_html__('Security headers', 'cerrojo-security-toolkit'),
             'rest-api' => \esc_html__('REST API', 'cerrojo-security-toolkit'),
+            'integrity' => \esc_html__('File integrity', 'cerrojo-security-toolkit'),
         };
     }
 

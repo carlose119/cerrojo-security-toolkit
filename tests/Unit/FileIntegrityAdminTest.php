@@ -1,0 +1,473 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {
+    if (! function_exists('__')) {
+        function __(string $text, string $domain = 'default'): string { return $text; }
+    }
+    if (! function_exists('esc_html')) {
+        function esc_html(string $value): string { return htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); }
+    }
+    if (! function_exists('esc_html__')) {
+        function esc_html__(string $value, string $domain): string { return esc_html($value); }
+    }
+    if (! function_exists('esc_attr')) {
+        function esc_attr(string $value): string { return htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); }
+    }
+    if (! function_exists('esc_url')) {
+        function esc_url(string $value): string { return htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); }
+    }
+    if (! function_exists('esc_textarea')) {
+        function esc_textarea(string $value): string { return htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); }
+    }
+    if (! function_exists('wp_nonce_field')) {
+        function wp_nonce_field(string $action): void { echo '<input type="hidden" name="_wpnonce" value="nonce-for-' . esc_attr($action) . '">'; }
+    }
+    if (! function_exists('submit_button')) {
+        function submit_button(string $label): void { echo '<button type="submit">' . esc_html($label) . '</button>'; }
+    }
+    if (! function_exists('wp_unslash')) {
+        function wp_unslash(string $value): string { return stripslashes($value); }
+    }
+    if (! function_exists('sanitize_text_field')) {
+        function sanitize_text_field(string $value): string { return trim(strip_tags($value)); }
+    }
+}
+
+namespace BastionSecurityWP\Tests\Unit {
+    use BastionSecurityWP\Admin\FileIntegrityAdmin;
+    use BastionSecurityWP\FileIntegrityBaseline;
+    use BastionSecurityWP\Security\FileIntegrityAlertPolicy;
+    use PHPUnit\Framework\TestCase;
+
+    /**
+     * The tripwire's panel: five commands, each behind its own nonce and the
+     * capability, and a rendering that only reads stored state — it never
+     * scans, never writes or deletes an option, and never claims the site is
+     * secure or that mail was delivered.
+     */
+    final class FileIntegrityAdminTest extends TestCase
+    {
+        private const HASH_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        private const HASH_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+        /** @var array<string, mixed> */
+        private array $store = [];
+
+        protected function tearDown(): void
+        {
+            unset($_POST);
+        }
+
+        public function testCapabilityRefusedRendersNothingAndPerformsNoAction(): void
+        {
+            $harness = $this->admin(authorized: false);
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $html = (string) ob_get_clean();
+
+            self::assertSame('', $html, 'A user without the capability must see nothing.');
+
+            $before = $this->store;
+            $scansBefore = $harness['scans'];
+            foreach (['save', 'check', 'baseline', 'acknowledge', 'forget'] as $command) {
+                $_POST = [];
+                $harness['admin']->handle($this->payload($command));
+            }
+
+            self::assertSame($before, $this->store, 'A refused capability must not mutate stored state.');
+            self::assertSame($scansBefore, $harness['scans'], 'A refused capability must never scan.');
+            self::assertSame([], $harness['mails'], 'A refused capability must never mail.');
+            self::assertSame(5, count($harness['redirects']), 'Each refused command still ends in a bounded redirect.');
+        }
+
+        public function testEachCommandRejectsAWrongNonceAndAcceptsItsOwn(): void
+        {
+            foreach (['save', 'check', 'baseline', 'acknowledge', 'forget'] as $command) {
+                $harness = $this->admin(
+                    baselineFiles: ['plugins/a.php' => self::HASH_A],
+                    scanFiles: ['plugins/a.php' => self::HASH_B],
+                    enabled: true,
+                    nonceValid: false,
+                );
+
+                $_POST = [];
+                $harness['admin']->handle($this->payload($command));
+
+                self::assertSame(0, $harness['scans'], $command . ' must not scan before the nonce passes.');
+                self::assertStringContainsString('invalid_nonce', $harness['redirects'][0], $command . ' must refuse a wrong nonce.');
+                self::assertNull($harness['policy']->lastResult(), $command . ' must do nothing on a wrong nonce.');
+                self::assertSame($harness['configBefore'], $harness['policy']->state(), $command . ' must not change the configuration on a wrong nonce.');
+            }
+
+            foreach (['save', 'check', 'baseline', 'acknowledge', 'forget'] as $command) {
+                $harness = $this->admin(
+                    baselineFiles: ['plugins/a.php' => self::HASH_A],
+                    scanFiles: ['plugins/a.php' => self::HASH_B],
+                    enabled: true,
+                );
+
+                $_POST = [];
+                $harness['admin']->handle($this->payload($command, nonceValid: true));
+
+                self::assertSame([FileIntegrityAdmin::nonceAction($command)], $harness['nonceActions'], $command . ' must verify against its own nonce action.');
+                self::assertStringNotContainsString('invalid_nonce', $harness['redirects'][0], $command . ' must accept its own nonce.');
+            }
+        }
+
+        public function testSaveEnablesAlertingAndSchedulesNothingItself(): void
+        {
+            $harness = $this->admin();
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test']));
+
+            $saved = $this->store[FileIntegrityAlertPolicy::OPTION_NAME] ?? null;
+            self::assertIsArray($saved);
+            self::assertTrue($saved['enabled']);
+            self::assertSame(['one@example.test'], $saved['recipients']);
+            self::assertSame(0, $harness['cronClears'], 'The panel must never schedule or unschedule by itself.');
+            self::assertStringContainsString('enabled', $harness['redirects'][0]);
+        }
+
+        public function testSaveDisablingClearsTheScheduledHookThroughTheInjectedSeam(): void
+        {
+            $harness = $this->admin(enabled: true);
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('save', ['recipients' => 'admin@example.test']));
+
+            $saved = $this->store[FileIntegrityAlertPolicy::OPTION_NAME] ?? null;
+            self::assertIsArray($saved);
+            self::assertFalse($saved['enabled'], 'An absent checkbox disables alerting.');
+            self::assertSame(['admin@example.test'], $saved['recipients'], 'Disabling preserves the recipient list.');
+            self::assertSame(1, $harness['cronClears'], 'Disabling clears the scheduled daily check.');
+            self::assertStringContainsString('disabled', $harness['redirects'][0]);
+        }
+
+        public function testSaveHonorsThePolicyValidationOutcomes(): void
+        {
+            $harness = $this->admin();
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'not-an-email']));
+            self::assertStringContainsString('invalid_recipients', $harness['redirects'][0]);
+
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => '  ']));
+            self::assertStringContainsString('recipients_required', $harness['redirects'][1]);
+
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test']));
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test']));
+            self::assertStringContainsString('unchanged', $harness['redirects'][3]);
+            self::assertIsArray($this->store[FileIntegrityAlertPolicy::OPTION_NAME] ?? null);
+        }
+
+        public function testCheckStoresAResultThroughThePolicy(): void
+        {
+            $harness = $this->admin(scanFiles: ['plugins/a.php' => self::HASH_A]);
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('check'));
+
+            $result = $harness['policy']->lastResult();
+            self::assertIsArray($result);
+            self::assertSame('baseline_created', $result['status']);
+            self::assertSame($result, $this->store[FileIntegrityAlertPolicy::RESULT_OPTION_NAME] ?? null, 'The admin must store the cycle through the policy, never alongside it.');
+            self::assertStringContainsString('check_recorded', $harness['redirects'][0]);
+        }
+
+        public function testBaselineCapturesTheScannedFiles(): void
+        {
+            $harness = $this->admin(scanFiles: ['themes/a.php' => self::HASH_A, 'mu-plugins/keeper.php' => self::HASH_B]);
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('baseline'));
+
+            $baseline = $harness['baseline']->read();
+            self::assertIsArray($baseline);
+            self::assertSame(
+                ['mu-plugins/keeper.php' => self::HASH_B, 'themes/a.php' => self::HASH_A],
+                $baseline['files'],
+            );
+            self::assertStringContainsString('baseline_captured', $harness['redirects'][0]);
+        }
+
+        public function testBaselineWithoutAUsableScanWritesNothing(): void
+        {
+            $harness = $this->admin(scanUnavailable: true);
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('baseline'));
+
+            self::assertNull($harness['baseline']->read(), 'No baseline is stored without a usable scan.');
+            self::assertStringContainsString('scan_unavailable', $harness['redirects'][0]);
+        }
+
+        public function testAcknowledgeMarksTheListedFindingsKnown(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/a.php' => self::HASH_A],
+                scanFiles: ['plugins/a.php' => self::HASH_B],
+                enabled: true,
+                mailResult: false,
+            );
+            // One cycle with a failed mail leaves the finding unacknowledged and listed.
+            $result = $harness['policy']->check();
+            self::assertSame('mail_failed', $result['status']);
+            self::assertFalse($harness['policy']->isKnown('plugins/a.php', self::HASH_B));
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('acknowledge'));
+
+            self::assertTrue($harness['policy']->isKnown('plugins/a.php', self::HASH_B), 'The listed finding must be marked known.');
+            self::assertSame(1, $harness['policy']->state()['known']);
+            self::assertStringContainsString('acknowledged', $harness['redirects'][0]);
+        }
+
+        public function testForgetClearsTheAcknowledgements(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/a.php' => self::HASH_A],
+                scanFiles: ['plugins/a.php' => self::HASH_B],
+                enabled: true,
+            );
+            $harness['policy']->acknowledge(['plugins/a.php' => self::HASH_B]);
+            self::assertTrue($harness['policy']->isKnown('plugins/a.php', self::HASH_B));
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('forget'));
+
+            self::assertFalse($harness['policy']->isKnown('plugins/a.php', self::HASH_B));
+            self::assertSame(0, $harness['policy']->state()['known']);
+            self::assertStringContainsString('cleared', $harness['redirects'][0]);
+        }
+
+        public function testRenderingNeverScansAndWritesNoOption(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/a.php' => self::HASH_A],
+                scanFiles: ['plugins/a.php' => self::HASH_B],
+                enabled: true,
+                mailResult: false,
+            );
+            $harness['policy']->check(); // a stored cycle with an unacknowledged stored finding exists
+            $scansBefore = $harness['scans'];
+            $before = $this->store;
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $html = (string) ob_get_clean();
+
+            self::assertSame($scansBefore, $harness['scans'], 'Rendering must never scan.');
+            self::assertSame($before, $this->store, 'Rendering must not write or delete an option.');
+            self::assertStringContainsString('plugins/a.php', $html);
+            self::assertStringContainsString('Changed', $html);
+            self::assertStringContainsString('not known yet', html_entity_decode($html));
+        }
+
+        public function testRenderingWithNoStoredResultSaysSoInsteadOfShowingZerosAsACleanSite(): void
+        {
+            $harness = $this->admin(enabled: true);
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $html = (string) ob_get_clean();
+
+            self::assertStringContainsString('No check cycle has run yet', html_entity_decode($html));
+            self::assertStringContainsString('does not mean the site is clean', html_entity_decode($html));
+        }
+
+        public function testAMailFailedResultIsShownAsAFailedDeliveryAndNeverAsSent(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/a.php' => self::HASH_A],
+                scanFiles: ['plugins/a.php' => self::HASH_B],
+                enabled: true,
+                mailResult: false,
+            );
+            $harness['policy']->check();
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $html = (string) ob_get_clean();
+
+            $decoded = html_entity_decode($html);
+            self::assertStringContainsString('failed', $decoded);
+            self::assertStringNotContainsString('was sent', $decoded);
+            self::assertStringNotContainsString('delivered successfully', $decoded);
+        }
+
+        public function testAnIncompleteCaptureIsStatedWithUnverifiableWording(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/a.php' => self::HASH_A],
+                scanFiles: ['plugins/a.php' => self::HASH_B],
+                enabled: true,
+                scanExtra: [
+                    'truncated' => true,
+                    'total' => 4000,
+                    'unreadable' => ['plugins/locked.php'],
+                    'skipped' => ['plugins/huge.php'],
+                ],
+            );
+            $harness['policy']->check();
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringContainsString('incomplete', $decoded);
+            self::assertStringContainsString('unverifiable', $decoded);
+            self::assertStringNotContainsString('unchanged', $decoded, 'An unreadable file must never be described as unchanged.');
+        }
+
+        /**
+         * @param array<string, string>|null $baselineFiles
+         * @param array<string, string> $scanFiles
+         * @param array<string, mixed> $scanExtra
+         * @return array<string, mixed>
+         */
+        private function admin(
+            ?array $baselineFiles = null,
+            array $scanFiles = [],
+            bool $enabled = false,
+            bool $authorized = true,
+            bool $nonceValid = true,
+            bool $mailResult = true,
+            bool $scanUnavailable = false,
+            array $scanExtra = [],
+        ): array {
+            $this->store = [];
+
+            if ($baselineFiles !== null) {
+                $this->store[FileIntegrityBaseline::OPTION_NAME] = [
+                    'schema' => FileIntegrityBaseline::SCHEMA_VERSION,
+                    'captured_at' => 1_700_000_000,
+                    'files' => $baselineFiles,
+                    'total' => count($baselineFiles),
+                    'truncated' => false,
+                ];
+            }
+
+            if ($enabled) {
+                $this->store[FileIntegrityAlertPolicy::OPTION_NAME] = [
+                    'schema' => 1,
+                    'enabled' => true,
+                    'recipients' => ['admin@example.test'],
+                    'known' => [],
+                ];
+            }
+
+            $store = &$this->store;
+            $state = [
+                'scans' => 0,
+                'mails' => [],
+                'redirects' => [],
+                'nonceActions' => [],
+                'cronClears' => 0,
+                'terminations' => 0,
+            ];
+
+            $baseline = new FileIntegrityBaseline(
+                readOption: static function () use (&$store): mixed {
+                    return $store[FileIntegrityBaseline::OPTION_NAME] ?? null;
+                },
+                writeOption: static function (array $value) use (&$store): bool {
+                    $store[FileIntegrityBaseline::OPTION_NAME] = $value;
+
+                    return true;
+                },
+                deleteOption: static function () use (&$store): bool {
+                    unset($store[FileIntegrityBaseline::OPTION_NAME]);
+
+                    return true;
+                },
+            );
+
+            $scanExtraDefault = ['files' => $scanFiles, 'total' => count($scanFiles), 'truncated' => false, 'unreadable' => [], 'skipped' => []];
+            $scan = static function () use (&$state, $scanUnavailable, $scanExtra, $scanExtraDefault): ?array {
+                ++$state['scans'];
+
+                if ($scanUnavailable) {
+                    return null;
+                }
+
+                return array_merge($scanExtraDefault, $scanExtra);
+            };
+
+            $policy = new FileIntegrityAlertPolicy(
+                $baseline,
+                $scan,
+                readOption: static function (string $name) use (&$store): mixed {
+                    return $store[$name] ?? null;
+                },
+                writeOption: static function (string $name, array $value) use (&$store): bool {
+                    $store[$name] = $value;
+
+                    return true;
+                },
+                mail: static function (array $to, string $subject, string $message) use (&$state, $mailResult): bool {
+                    $state['mails'][] = ['to' => $to, 'subject' => $subject];
+
+                    return $mailResult;
+                },
+            );
+
+            $admin = new FileIntegrityAdmin(
+                $policy,
+                $baseline,
+                $scan,
+                static fn (string $capability): bool => $authorized && $capability === 'manage_options',
+                static function (string $nonce, string $action) use (&$state, $nonceValid): bool {
+                    $state['nonceActions'][] = $action;
+
+                    return $nonceValid && $nonce === 'valid';
+                },
+                fn (string $action): string => $this->nonceField($action),
+                static fn (string $path): string => 'https://example.test/wp-admin/' . $path,
+                static fn (): string => 'POST',
+                static function (string $url) use (&$state): bool {
+                    $state['redirects'][] = $url;
+
+                    return true;
+                },
+                static function () use (&$state): void {
+                    ++$state['terminations'];
+                },
+                static function (string $hook) use (&$state): void {
+                    ++$state['cronClears'];
+                },
+                static fn (int $timestamp): string => 'DATE-' . (string) $timestamp,
+            );
+
+            $harness = ['admin' => $admin, 'policy' => $policy, 'baseline' => $baseline];
+            foreach ($state as $key => &$value) {
+                $harness[$key] = &$value;
+            }
+            unset($value);
+            $harness['configBefore'] = $policy->state();
+
+            return $harness;
+        }
+
+        private function nonceField(string $action): string
+        {
+            return '<input type="hidden" name="_wpnonce" value="nonce-for-' . esc_attr($action) . '">';
+        }
+
+        /**
+         * @param array<string, string> $extra
+         * @return array<string, string>
+         */
+        private function payload(string $command, array $extra = [], bool $nonceValid = true): array
+        {
+            return array_merge([
+                '_wpnonce' => $nonceValid ? 'valid' : 'wrong',
+                'target' => FileIntegrityAdmin::TARGET,
+                'command' => $command,
+            ], $extra);
+        }
+    }
+}

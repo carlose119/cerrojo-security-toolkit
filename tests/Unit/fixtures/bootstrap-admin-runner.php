@@ -15,6 +15,19 @@ declare(strict_types=1);
 
 $GLOBALS['bastion_stub_options'] = [];
 $GLOBALS['bastion_stub_page'] = null;
+$GLOBALS['bastion_stub_scheduled'] = [];
+$GLOBALS['bastion_stub_cron_cleared'] = [];
+$GLOBALS['bastion_stub_option_writes'] = 0;
+
+if (getenv('BASTION_STUB_ENABLE_INTEGRITY') === '1') {
+    // Enable tripwire alerting without the panel: the schedule must be owned by boot() alone.
+    $GLOBALS['bastion_stub_options']['bastion_security_wp_file_integrity_alerts'] = [
+        'schema' => 1,
+        'enabled' => true,
+        'recipients' => ['admin@example.test'],
+        'known' => [],
+    ];
+}
 
 function bastion_rerender(string $tab): string
 {
@@ -41,6 +54,7 @@ function get_option(string $name, mixed $default = false): mixed
 
 function add_option(string $name, mixed $value = '', string $deprecated = '', mixed $autoload = 'yes'): bool
 {
+    ++$GLOBALS['bastion_stub_option_writes'];
     $GLOBALS['bastion_stub_options'][$name] = $value;
 
     return true;
@@ -48,6 +62,7 @@ function add_option(string $name, mixed $value = '', string $deprecated = '', mi
 
 function update_option(string $name, mixed $value, mixed $autoload = null): bool
 {
+    ++$GLOBALS['bastion_stub_option_writes'];
     $GLOBALS['bastion_stub_options'][$name] = $value;
 
     return true;
@@ -55,6 +70,7 @@ function update_option(string $name, mixed $value, mixed $autoload = null): bool
 
 function delete_option(string $name): bool
 {
+    ++$GLOBALS['bastion_stub_option_writes'];
     unset($GLOBALS['bastion_stub_options'][$name]);
 
     return true;
@@ -356,11 +372,15 @@ function wp_next_scheduled(string $hook): int|false
 
 function wp_schedule_event(int $timestamp, string $recurrence, string $hook): bool
 {
+    $GLOBALS['bastion_stub_scheduled'][] = ['hook' => $hook, 'recurrence' => $recurrence, 'timestamp' => $timestamp];
+
     return true;
 }
 
 function wp_clear_scheduled_hook(string $hook): int|false
 {
+    $GLOBALS['bastion_stub_cron_cleared'][] = $hook;
+
     return 0;
 }
 
@@ -473,4 +493,7 @@ do_action('admin_menu');
 
 echo "BASTION_BOOTSTRAP_OK\n";
 echo 'BASTION_STUB_OPTIONS=' . implode(',', array_keys($GLOBALS['bastion_stub_options'])) . "\n";
+echo 'BASTION_STUB_OPTION_WRITES=' . $GLOBALS['bastion_stub_option_writes'] . "\n";
+echo 'BASTION_STUB_SCHEDULED=' . json_encode($GLOBALS['bastion_stub_scheduled']) . "\n";
+echo 'BASTION_STUB_CRON_CLEARED=' . json_encode($GLOBALS['bastion_stub_cron_cleared']) . "\n";
 echo bastion_rerender($_GET['tab']);
