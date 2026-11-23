@@ -135,7 +135,14 @@ final class Bootstrap
             \add_action('admin_post_' . CriticalSettingsAlertAdmin::POST_ACTION, $criticalSettingsAlertAdmin->handleRequest(...));
             \add_action('admin_post_' . SecurityHeadersAdmin::POST_ACTION, $securityHeadersAdmin->handleRequest(...));
             \add_action('admin_post_' . FileIntegrityAdmin::POST_ACTION, $fileIntegrityAdmin->handleRequest(...));
-            \add_action(FileIntegrityAdmin::CRON_HOOK, $fileIntegrityPolicy->check(...));
+            \add_action(FileIntegrityAdmin::CRON_HOOK, static function () use ($fileIntegrityPolicy): void {
+                // A scheduled event can outlive the switch. When alerting is off, a
+                // cycle would still hash every watched file and write a result nobody
+                // asked for, so the event does nothing until alerting is re-enabled.
+                if ($fileIntegrityPolicy->isEnabled()) {
+                    $fileIntegrityPolicy->check();
+                }
+            });
             // The daily cycle exists only while tripwire alerting is enabled; disabling
             // it through the panel clears the scheduled hook again.
             if (

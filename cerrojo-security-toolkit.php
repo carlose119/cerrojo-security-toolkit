@@ -28,3 +28,15 @@ require_once $bastion_security_wp_autoload;
 if (class_exists(\BastionSecurityWP\Bootstrap::class)) {
     \BastionSecurityWP\Bootstrap::boot();
 }
+
+// Deactivating the plugin must not leave the daily tripwire check behind: its
+// callback lives in code that is no longer loaded, and the orphan event would
+// keep firing on a schedule nobody asked for. Registered after the autoloader so
+// the hook constant resolves.
+if (\function_exists('register_deactivation_hook')) {
+    \register_deactivation_hook(__FILE__, static function (): void {
+        if (\function_exists('wp_clear_scheduled_hook')) {
+            \wp_clear_scheduled_hook(\BastionSecurityWP\Admin\FileIntegrityAdmin::CRON_HOOK);
+        }
+    });
+}
