@@ -304,7 +304,7 @@ CI runs the same validation, full PHPUnit suite, dependency audit, and PHP synta
 
 ## Build
 
-**Preserved archive in this checkout:** `.build/cerrojo-security-toolkit.zip` is historical local output identifying as version 0.2.2, not a verified current-source artifact or the published 0.3.0 release. Do not distribute it as 0.3.0 or overwrite it here. Use the [official v0.3.0 release](https://github.com/carlose119/cerrojo-security-toolkit/releases/tag/v0.3.0) and its [recorded release evidence](odd/tasks/release-0.3.0.md) for published provenance; location or filename alone does not establish it.
+**Build output in this checkout:** `.build/` is gitignored scratch output of `tools/build.php`, not a preserved artifact. A full test run rebuilds it, because `PackagingTest` executes the builder, so the directory always holds whatever the last build produced — currently a 0.5.0 archive — and a rebuild overwrites whatever was there before. Never distribute it and never treat it as release provenance: use the [official release](https://github.com/carlose119/cerrojo-security-toolkit/releases) and the recorded release evidence under `odd/tasks/` instead. The local 0.2.2 archive this paragraph used to describe was overwritten by such a rebuild and is not byte-recoverable; the `v0.2.2` tag still rebuilds a 45-file archive that serves the same purpose.
 
 Build and verify the installable ZIP locally (not in this checkout while preserving its archive):
 
