@@ -10,6 +10,7 @@ use BastionSecurityWP\Admin\RestRouteControlsAdmin;
 use BastionSecurityWP\Admin\FileEditorAdmin;
 use BastionSecurityWP\Admin\LoginProtectionAdmin;
 use BastionSecurityWP\Admin\PluginActivityAlertAdmin;
+use BastionSecurityWP\Admin\RestExposurePanel;
 use BastionSecurityWP\Admin\SecurityDashboard;
 use BastionSecurityWP\Admin\SecurityHeadersAdmin;
 use BastionSecurityWP\Admin\XmlRpcPingbackAdmin;
@@ -54,6 +55,7 @@ final class Bootstrap
         $xmlRpcPingbackPolicy = new XmlRpcPingbackPolicy();
         $restRouteControlsPolicy = new RestRouteControlsPolicy();
         $restRouteCatalog = new RestRouteCatalog();
+        $restSurfaceSnapshot = new RestSurfaceSnapshot();
 
         $siteHealth = new SiteHealthDiagnostics(
             fileEditorPolicy: $fileEditorPolicy,
@@ -83,6 +85,9 @@ final class Bootstrap
             $administratorAccountAlertAdmin = new AdministratorAccountAlertAdmin($administratorAccountAlertPolicy);
             $criticalSettingsAlertAdmin = new CriticalSettingsAlertAdmin($criticalSettingsAlertPolicy);
             $securityHeadersAdmin = new SecurityHeadersAdmin($securityHeadersPolicy);
+            // The exposure panel is an advertisement in readme.txt: without this
+            // wiring it renders nothing and its capture/clear actions are dead.
+            $restExposurePanel = new RestExposurePanel($restSurfaceSnapshot);
             $dashboard = new SecurityDashboard(
                 $siteHealth,
                 $fileEditorAdmin,
@@ -93,6 +98,7 @@ final class Bootstrap
                 $pluginActivityAlertAdmin,
                 $administratorAccountAlertAdmin,
                 criticalSettingsAlertAdmin: $criticalSettingsAlertAdmin,
+                restExposurePanel: $restExposurePanel,
             );
             \add_action('wp_login_failed', $loginProtectionPolicy->recordFailure(...), 10, 2);
             \add_action('wp_login', $loginProtectionPolicy->recordSuccess(...), 10, 2);
