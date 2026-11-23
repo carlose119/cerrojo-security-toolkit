@@ -119,6 +119,29 @@ final class BootstrapWiringTest extends TestCase
         return (string) $matches[1];
     }
 
+    public function testAScheduledCheckDoesNothingWhileAlertingIsDisabled(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $runner = $root . '/tests/Unit/fixtures/bootstrap-admin-runner.php';
+
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'xdebug.mode=off', $runner],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $root,
+            array_merge(getenv(), ['BASTION_STUB_TAB' => 'integrity', 'BASTION_STUB_FIRE_CRON' => '1']),
+        );
+        self::assertIsResource($process);
+
+        $output = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        self::assertMatchesRegularExpression('/^BASTION_STUB_OPTION_WRITES=0$/m', $output, 'A cycle must not run while alerting is off.');
+        self::assertMatchesRegularExpression('/^BASTION_STUB_OPTIONS=$/m', $output, 'A cycle must not store a result while alerting is off.');
+    }
+
     private function runDashboard(string $tab, bool $enableIntegrity = false): string
     {
         $root = dirname(__DIR__, 2);

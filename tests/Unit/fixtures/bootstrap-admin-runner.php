@@ -508,6 +508,10 @@ $_GET['page'] = 'bastion-security-wp';
 do_action('admin_menu');
 do_action('init');
 
+if (getenv('BASTION_STUB_FIRE_CRON') === '1') {
+    do_action('bastion_security_wp_file_integrity_check');
+}
+
 echo "BASTION_BOOTSTRAP_OK\n";
 echo 'BASTION_STUB_TEXTDOMAINS=' . implode(',', $GLOBALS['bastion_stub_textdomains']) . "\n";
 echo 'BASTION_STUB_OPTIONS=' . implode(',', array_keys($GLOBALS['bastion_stub_options'])) . "\n";
