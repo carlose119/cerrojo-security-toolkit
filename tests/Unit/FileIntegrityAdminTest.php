@@ -323,6 +323,32 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringNotContainsString('unchanged', $decoded, 'An unreadable file must never be described as unchanged.');
         }
 
+        public function testAFailedScanIsNeverReportedAsCompleteCoverage(): void
+        {
+            $harness = $this->admin(scanUnavailable: true);
+            $harness['policy']->check();
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringNotContainsString('Coverage: complete', $decoded, 'A cycle that could not scan must not claim complete coverage.');
+            self::assertStringContainsString('unknown for this cycle', $decoded);
+        }
+
+        public function testTheCycleThatStoresTheFirstBaselineDoesNotClaimAComparison(): void
+        {
+            $harness = $this->admin(scanFiles: ['plugins/a.php' => self::HASH_A]);
+            $harness['policy']->check();
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringNotContainsString('Coverage: complete', $decoded);
+            self::assertStringContainsString('stored the first baseline', $decoded);
+        }
+
         /**
          * @param array<string, string>|null $baselineFiles
          * @param array<string, string> $scanFiles

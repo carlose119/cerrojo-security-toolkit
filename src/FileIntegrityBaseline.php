@@ -55,6 +55,11 @@ final class FileIntegrityBaseline
      * (writing nothing) when the clock or the capture timestamp is unusable,
      * when any entry is malformed, or when the option write fails.
      *
+     * The stored `truncated` flag describes this storage bound only. A manifest
+     * seeded from a capture that was itself truncated records the files it was
+     * given; the coverage of that cycle belongs to the cycle's own result, which
+     * is where the panel and the alert read it from.
+     *
      * @param array<mixed> $files Raw map<string relativePath, string sha256>.
      */
     public function capture(array $files, ?int $now = null): bool

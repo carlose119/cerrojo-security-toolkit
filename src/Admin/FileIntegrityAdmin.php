@@ -299,6 +299,23 @@ final class FileIntegrityAdmin
      */
     private function renderCoverage(array $result): void
     {
+        $status = is_string($result['status'] ?? null) ? $result['status'] : '';
+
+        // A cycle that could not scan, or one that only stored a baseline, has no
+        // comparison to describe. Claiming complete coverage here would be the exact
+        // lie this feature exists to avoid.
+        if ($status === 'scan_unavailable' || $status === 'baseline_unavailable') {
+            echo '<p>' . \esc_html__('Coverage: unknown for this cycle — the capture could not run, so nothing was compared.', 'cerrojo-security-toolkit') . '</p>';
+
+            return;
+        }
+
+        if ($status === 'baseline_created') {
+            echo '<p>' . \esc_html__('Coverage: this cycle stored the first baseline; no comparison was made yet.', 'cerrojo-security-toolkit') . '</p>';
+
+            return;
+        }
+
         $truncated = $result['truncated'] === true;
         $unreadable = is_int($result['unreadable']) ? $result['unreadable'] : 0;
         $skipped = is_int($result['skipped']) ? $result['skipped'] : 0;
