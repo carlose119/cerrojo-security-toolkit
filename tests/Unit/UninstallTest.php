@@ -20,6 +20,7 @@ final class UninstallTest extends TestCase
         'bastion_security_wp_critical_settings_alert_result',
         'bastion_security_wp_critical_settings_alerts',
         'bastion_security_wp_file_editor_lock',
+        'bastion_security_wp_file_integrity_baseline',
         'bastion_security_wp_login_protection',
         'bastion_security_wp_login_protection_metrics',
         'bastion_security_wp_plugin_activity_alert_result',
@@ -63,7 +64,7 @@ final class UninstallTest extends TestCase
 
         self::assertSame(self::PINNED_OPTIONS, $names);
         self::assertSame(array_values(array_unique($names)), $names, 'Duplicate removal target.');
-        self::assertCount(14, $names);
+        self::assertCount(15, $names);
     }
 
     public function testOptionInventoryExcludesForeignAndUnpersistedIdentifiers(): void
