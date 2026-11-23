@@ -1,0 +1,1364 @@
+# Copyright (C) 2026 Carlos Carrillo
+# This file is distributed under the GPL-2.0-or-later license.
+msgid ""
+msgstr ""
+"Project-Id-Version: Cerrojo Security Toolkit 0.5.0\n"
+"Report-Msgid-Bugs-To: https://github.com/carlose119/cerrojo-security-toolkit/issues\n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Domain: cerrojo-security-toolkit\n"
+
+#: src/Admin/FileIntegrityAdmin.php:246
+msgid "%d change(s) are currently marked known."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:319
+msgid "%d watched file(s) could not be read, so those files are unverifiable, not a match with the baseline."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:323
+msgid "%d watched file(s) were skipped for exceeding the size bound."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:262
+msgid "; the remainder is omitted for length."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:261
+msgid "A compatibility acknowledgement is required before adding route rules."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:359
+msgid "A finding states what differs from the stored baseline; it is not a claim that the file is safe or that the site was compromised. An absent or acknowledged finding does not assert that everything is as it should be."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:187
+msgid "A maximum of 100 selected rules is allowed. GET and synthesized HEAD are independent selections. OPTIONS is not configurable. Query strings are outside the matched request route."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:316
+msgid "A new REST surface baseline was captured."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:428
+msgid "A new baseline was captured from a fresh scan."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:427
+msgid "A new check cycle ran and its outcome is recorded below."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:448
+msgid "A risk acknowledgement is required before enabling the selected high-impact policies. No change was made."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:102
+msgid "A stale Cerrojo preference is enabled, but it does not own the effective constant. You may clear only that preference."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:237
+msgid "A structural diff reports registration movement only; it does not describe authorization quality."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:401
+msgid "Acknowledge reported changes"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:183
+msgid "Acknowledge the temporary legitimate-user and shared-proxy lockout risk before enabling Login Protection."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:146 src/Admin/CriticalSettingsAlertAdmin.php:153 src/Admin/FileIntegrityAdmin.php:435 src/Admin/PluginActivityAlertAdmin.php:144
+msgid "Add at least one valid recipient before enabling alerts."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:263 src/Admin/FileIntegrityAdmin.php:365 src/Admin/RestExposurePanel.php:223
+msgid "Added"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:234
+msgid "Added route keys"
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:104
+msgid "Administrator account alert settings"
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:144
+msgid "Administrator account alert settings were already in the requested state."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:143
+msgid "Administrator account alert settings were updated."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:91
+msgid "Administrator account alerts"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:106
+msgid "Aggregate metrics"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:266
+msgid "Alerted about"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:284
+msgid "Alerting is enabled, but no valid recipient is configured, so the cycle could not send any alert."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:433
+msgid "All acknowledgements were cleared, so every current change alerts again."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:210
+msgid "Baseline"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:263
+msgid "Before enabling, the current request, home URL, and site URL must all use HTTPS. Disabling stops future emission, but browsers may retain the 24-hour policy until it expires."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:188
+msgid "Blocking occurs before permission and endpoint callbacks, after earlier authentication/validation work. Earlier rest_pre_dispatch responses, later filters, direct callback invocation, non-REST paths, and edge caches remain outside this control."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:391
+msgid "Blocks legacy Adobe cross-domain policy discovery; validate any remaining legacy client dependency."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:377
+msgid "Browser capability restrictions"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:102
+msgid "Bucket"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:118
+msgid "Bucket keys use HMAC SHA-256 with the WordPress authentication secret. Raw usernames, email addresses, and IP addresses are not stored in these buckets or displayed."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:395
+msgid "Can block other sites from loading this site's resources. Validate every intentional cross-site consumer."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:389
+msgid "Can break legitimate"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:394
+msgid "Can change popup and opener relationships. Validate authentication, payment, and integration popup flows."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:293
+msgid "Capture REST surface baseline"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:395
+msgid "Capture a new baseline"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:289
+msgid "Capture and clear"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:191
+msgid "Captured:"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:290
+msgid "Capturing replaces any stored baseline with the current surface. Clearing removes the stored baseline. Only the baseline option is written or deleted; no route, callback, or permission value is stored or executed."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:397
+msgid "Capturing replaces the stored baseline with a fresh scan, so finding reports against the replaced baseline stop. Capture deliberately, for example after you reviewed and accepted the current files."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:83
+msgid "Cerrojo Security Toolkit"
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:128
+msgid "Cerrojo Security Toolkit sections"
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:95
+msgid "Cerrojo also removes every case-insensitive X-Pingback entry from the WordPress wp_headers filter. A later filter at the same priority can re-add methods or headers, and direct, server, proxy, or CDN headers are outside this coverage."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:103
+msgid "Cerrojo attempts one plain-text email per recipient. An attempt does not prove delivery, and alerts do not block or roll back the WordPress update."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:98
+msgid "Cerrojo attempts wp_mail delivery independently for each recipient, continues after a failed send, does not retry, and does not prove delivery. The tool does not block or roll back account changes."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:449
+msgid "Cerrojo could not confirm HSTS readiness, so no selected policy was changed. Use an HTTPS admin request and configure both the WordPress Address and Site Address with HTTPS, then retry."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:155
+msgid "Cerrojo diagnostics"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:185
+msgid "Cerrojo only adds missing header names on eligible front-end responses. Existing names are matched case-insensitively; external spelling, values, and order remain unchanged."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:166
+msgid "Cerrojo scans the watched code files under plugins, mu-plugins and themes, keeps that list as a baseline, and reports files that are added, changed or removed since the baseline. One alert is attempted per change until the change is acknowledged. Cerrojo never writes, moves, deletes or repairs a watched file, and it never uploads content."
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:95
+msgid "Cerrojo sends one email per recipient so addresses are not disclosed to each other. An enabled setting means Cerrojo will attempt to send; it does not prove delivery."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:114
+msgid "Cerrojo stores one WordPress option. Disabling it stops Cerrojo from defining the constant on the next request. No configuration file is edited."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:264 src/Admin/FileIntegrityAdmin.php:367
+msgid "Changed"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:171
+msgid "Choose only the policies you intend to change, review their exact values and risks, then apply one selected action."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:298
+msgid "Clear REST surface baseline"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:252
+msgid "Clear all REST Route Controls"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:249
+msgid "Clear all saved REST route rules without loading the catalog. Deactivation also stops enforcement but preserves the option."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:409
+msgid "Clears every acknowledgement, so every current change alerts again on the next cycle."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:374
+msgid "Commands"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:367
+msgid "Compatibility restrictions"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:185 src/Admin/XmlRpcPingbackAdmin.php:93
+msgid "Compatibility warning:"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:247 src/Admin/SecurityHeadersAdmin.php:366
+msgid "Conservative baseline"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:102
+msgid "Cooldowns"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:152
+msgid "Counts are structural, derived from registered values only; permission callbacks were never invoked."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:183
+msgid "Coverage and intentional omissions"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:111 src/Admin/XmlRpcPingbackAdmin.php:94
+msgid "Coverage and limitations"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:186
+msgid "Coverage is limited to the"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:326
+msgid "Coverage was incomplete:"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:307
+msgid "Coverage: complete for the watched surfaces in this capture."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:261
+msgid "Coverage: this group is emitted only on eligible wp_headers front-end responses; verify the final response at every serving edge."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:137
+msgid "Current REST surface"
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:135
+msgid "DISALLOW_FILE_EDIT is defined outside Cerrojo, so Cerrojo did not change its preference."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:104
+msgid "Direct peer address"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:113
+msgid "Direct-peer detection is available. The address itself is never displayed."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:114
+msgid "Direct-peer detection is unavailable, so only the identity dimension can be applied."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:405
+msgid "Disable Browser capability restrictions"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:411
+msgid "Disable HSTS 24-hour trial"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:407
+msgid "Disable Legacy cross-domain policy denial"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:142
+msgid "Disable Login Protection"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:409
+msgid "Disable Mixed-content upgrade"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:413
+msgid "Disable Opener isolation"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:403
+msgid "Disable Same-origin framing"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:415
+msgid "Disable Same-site resource isolation"
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:100
+msgid "Disable XML-RPC Pingback Protection"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:277
+msgid "Disable all Cerrojo headers"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:272
+msgid "Disable every Cerrojo-managed header preference. Optional groups are disabled before the baseline; a two-option write can partially fail, and the resulting state will be shown after redirect."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:250
+msgid "Disable security header baseline"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:234
+msgid "Disable selected"
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:238 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityHeadersAdmin.php:241 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:87
+msgid "Disabled"
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:105
+msgid "Disabled by default, this tool sends only to the recipients configured below and does not fall back to an administrator email address."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:390
+msgid "Disables camera, microphone, and geolocation for this response, including embedded features that rely on them."
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:96
+msgid "Disabling Cerrojo filtering cannot restore removals made by other components. It only stops Cerrojo from removing these methods and WordPress-filtered headers on later requests."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:116 src/Admin/PluginActivityAlertAdmin.php:106
+msgid "Disabling preserves the configured recipient list for a later re-enable."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:109
+msgid "Disabling preserves the configured recipient list for a later re-enable. Delete the saved option to remove the configuration completely."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:271
+msgid "Emergency rollback"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:404
+msgid "Enable Browser capability restrictions"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:410
+msgid "Enable HSTS 24-hour trial"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:406
+msgid "Enable Legacy cross-domain policy denial"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:132 src/Admin/LoginProtectionAdmin.php:134 src/Admin/LoginProtectionAdmin.php:143
+msgid "Enable Login Protection"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:408
+msgid "Enable Mixed-content upgrade"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:412
+msgid "Enable Opener isolation"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:402
+msgid "Enable Same-origin framing"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:414
+msgid "Enable Same-site resource isolation"
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:112
+msgid "Enable URL Change Alerts"
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:101
+msgid "Enable XML-RPC Pingback Protection"
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:105
+msgid "Enable administrator account alerts"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:380
+msgid "Enable file change email alerts"
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:102
+msgid "Enable plugin activity email alerts"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:250
+msgid "Enable security header baseline"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:233
+msgid "Enable selected"
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:238 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityHeadersAdmin.php:241 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:87
+msgid "Enabled"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:172
+msgid "Enabling any high-impact selection requires the aggregate acknowledgement below."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:117
+msgid "Enforcement is best-effort: transient eviction and concurrent read-modify-write races can weaken throttling, and aggregate metrics can undercount. Final authentication enforcement still allows WordPress password hashing and user lookup, so this does not provide WAF or DDoS protection or a security guarantee."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:108 src/Admin/PluginActivityAlertAdmin.php:105
+msgid "Enter email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:383
+msgid "Enter email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient. Disabling preserves the configured recipient list and clears the scheduled daily check."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:115
+msgid "Enter up to 50 recipients as email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:431
+msgid "Every listed finding from the last cycle was marked known; the corresponding alert stops until the acknowledgements are cleared."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:145 src/Admin/CriticalSettingsAlertAdmin.php:152 src/Admin/FileIntegrityAdmin.php:434 src/Admin/PluginActivityAlertAdmin.php:143
+msgid "Every recipient must be a valid email address. No change was made."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:170
+msgid "Failed attempts"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:102
+msgid "Failure thresholds"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:164
+msgid "File change tripwire"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:425
+msgid "File change tripwire alerting was disabled. Configured recipients were preserved and the scheduled daily check was cleared."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:424
+msgid "File change tripwire alerting was enabled. A daily check is scheduled while alerting stays enabled."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:379
+msgid "File change tripwire settings"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:426
+msgid "File change tripwire settings were already in the requested state."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:174
+msgid "File integrity"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:332
+msgid "Findings from this cycle"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:393
+msgid "Forces future browser requests to HTTPS for 24 hours. A broken HTTPS deployment can make the site unreachable to returning browsers."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:407
+msgid "Forget acknowledgements"
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:151
+msgid "Good"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:380
+msgid "HSTS 24-hour trial"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:169
+msgid "HTTP security header policies"
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:171
+msgid "Hardening"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:172
+msgid "High-impact policies can break embedding, browser features, resources, transport, or"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:230
+msgid "I acknowledge that selected high-impact policies can break site behavior and I have validated a rollback path."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:429
+msgid "I acknowledge this policy can break site behavior and have validated a rollback path."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:133
+msgid "I understand that legitimate users, especially behind shared proxies, can be temporarily locked out. I can disable Login Protection from this page to stop future enforcement."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:186
+msgid "I understand the impact of every newly selected method and route template."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:175
+msgid "Individual controls"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:153
+msgid "Invalidate all current Login Protection buckets while preserving the enabled state and aggregate metrics."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:252
+msgid "Last check cycle"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:378
+msgid "Legacy cross-domain policy denial"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:98
+msgid "Login Protection"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:102
+msgid "Login Protection thresholds"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:182
+msgid "Login Protection was already in the requested state."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:180
+msgid "Login Protection was disabled and prior temporary blocks were invalidated."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:179
+msgid "Login Protection was enabled."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:213
+msgid "Low-risk defaults, but final delivery still depends on the serving path."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:87
+msgid "Manage reversible WordPress hardening controls."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:403
+msgid "Marks every finding listed above as known, so it stops alerting until the acknowledgements are cleared. Acknowledging states that you reviewed a change and consider it expected; it is not a statement that the file is safe."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:95
+msgid "Messages contain the target user ID and bounded login, the administrator role where applicable, contextual current user ID and login, site name and URL, and WordPress-local timestamp. They exclude email addresses, display names, IP addresses, user agents, passwords, capability lists, deletion reassignment, and arbitrary metadata."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:379
+msgid "Mixed-content upgrade"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:263
+msgid "More than 100 route rules were submitted. No change was made."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:123 src/Admin/CriticalSettingsAlertAdmin.php:130 src/Admin/PluginActivityAlertAdmin.php:120
+msgid "Most recent alert attempt: a stored result exists, but it is not shown because it could not be validated against the current configuration."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:126 src/Admin/CriticalSettingsAlertAdmin.php:133 src/Admin/PluginActivityAlertAdmin.php:123
+msgid "Most recent alert attempt: none has been observed yet."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:135 src/Admin/CriticalSettingsAlertAdmin.php:142 src/Admin/PluginActivityAlertAdmin.php:132
+msgid "Most recent alert attempt: the cycle had mixed outcomes (recorded %s): %d accepted, %d refused, %d errored."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:132 src/Admin/CriticalSettingsAlertAdmin.php:139 src/Admin/PluginActivityAlertAdmin.php:129
+msgid "Most recent alert attempt: the mail transport accepted the message (recorded %s). This is not proof that the message reached its destination."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:133 src/Admin/CriticalSettingsAlertAdmin.php:140 src/Admin/PluginActivityAlertAdmin.php:130
+msgid "Most recent alert attempt: the mail transport did not accept the message (recorded %s). Check the site's mail configuration."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:134 src/Admin/CriticalSettingsAlertAdmin.php:141 src/Admin/PluginActivityAlertAdmin.php:131
+msgid "Most recent alert attempt: the mail transport raised an error (recorded %s)."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:198
+msgid "Namespaces"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:156
+msgid "Namespaces are collapsed for scanning; selected groups open automatically. Use browser Find to locate a route. Routes remain discoverable because this policy does not remove or hide them."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:152
+msgid "Needs attention"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:172
+msgid "Never"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:185
+msgid "New selections can break administration, site features, and integrations for every identity. Keep an independent non-REST rollback path."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:189
+msgid "No COOP"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:191
+msgid "No CSP"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:190
+msgid "No HSTS"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:185
+msgid "No REST surface baseline is stored. Capturing one records the current registered route keys so later visits can show what appeared, disappeared, or changed permission class."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:285
+msgid "No baseline existed, so this cycle created one from the current scan. No files were compared and nothing was concluded."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:255
+msgid "No check cycle has run yet, so there is no comparison to show. That does not mean the site is clean."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:166
+msgid "No configurable methods (OPTIONS and unknown methods are omitted)."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:192
+msgid "No deprecated headers."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:188
+msgid "No global"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:240
+msgid "No recipient is configured. Enabling requires at least one valid recipient; a cycle without a recipient cannot send any alert."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:103
+msgid "Normalized username or email"
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:86
+msgid "Not assessed"
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:101
+msgid "Old and new URL values in alert messages are redacted and bounded. User information, query strings, and fragments are removed while the URL path is retained when available."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:115
+msgid "Only REMOTE_ADDR is used; forwarded headers are not trusted. A shared proxy address can cause temporary lockout for legitimate users."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:441
+msgid "Only part of the requested header change was saved. Review the resulting states below before retrying."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:104
+msgid "Only the current site context is monitored. On multisite, there is no cross-site or network fan-out."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:97
+msgid "Only the current site context is observed. On multisite, remove_user_from_blog may bypass the role-removal hook through remove_all_caps. Cross-site fan-out, network deletion, and super-admin grants and revocations are outside this tool."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:154
+msgid "Open WordPress Site Health"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:381
+msgid "Opener isolation"
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:170
+msgid "Overview"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:225
+msgid "Permission class changed"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:236
+msgid "Permission-class-changed route keys"
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:101
+msgid "Plugin activity email alert settings"
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:142
+msgid "Plugin activity email alert settings were already in the requested state."
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:91
+msgid "Plugin activity email alerts"
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:141
+msgid "Plugin activity email alerts were disabled. Configured recipients were preserved."
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:140
+msgid "Plugin activity email alerts were enabled."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:115
+msgid "Proxy and shared-address warning:"
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:173
+msgid "REST API"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:98
+msgid "REST Exposure Findings"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:140
+msgid "REST Route Controls"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:260
+msgid "REST Route Controls were already in the requested state."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:259
+msgid "REST Route Controls were updated."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:181
+msgid "REST surface baseline"
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:106 src/Admin/CriticalSettingsAlertAdmin.php:113 src/Admin/FileIntegrityAdmin.php:381 src/Admin/PluginActivityAlertAdmin.php:103
+msgid "Recipients"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:245
+msgid "Recipients:"
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:193
+msgid "Recommended action"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:146
+msgid "Registered REST route handlers:"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:265 src/Admin/FileIntegrityAdmin.php:366 src/Admin/RestExposurePanel.php:224
+msgid "Removed"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:235
+msgid "Removed route keys"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:392
+msgid "Requests insecure subresources over HTTPS instead and can expose broken resources without an HTTPS endpoint."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:152 src/Admin/LoginProtectionAdmin.php:154
+msgid "Reset temporary blocks"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:109
+msgid "Resetting temporary blocks preserves aggregate metrics."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:148
+msgid "Review Cerrojo’s focused posture checks, then use native WordPress Site Health for the full test suite."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:97
+msgid "Review exact header policies, select bounded changes, and verify the final response at every serving edge."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:100
+msgid "Review the active REST route-template catalog and choose method-level blocks."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:199
+msgid "Route templates"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:389
+msgid "Run a check now"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:391
+msgid "Runs one bounded capture and compares it with the stored baseline. If no baseline exists, the cycle creates one and alerts nobody."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:376
+msgid "Same-origin framing"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:382
+msgid "Same-site resource isolation"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:189
+msgid "Save REST Route Controls"
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:118
+msgid "Save URL Change Alert settings"
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:111
+msgid "Save administrator account alert settings"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:384
+msgid "Save file change tripwire settings"
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:108
+msgid "Save plugin activity alert settings"
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:172
+msgid "Security headers"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:447
+msgid "Select one or more unique supported policies. No change was made."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:149
+msgid "Select registered REST route templates and methods to block for ALL users and integrations. Dynamic templates match every concrete URL accepted by WordPress."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:200
+msgid "Selectable pairs"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:170 src/Admin/RestRouteControlsAdmin.php:201
+msgid "Selected"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:181
+msgid "Selected (stale)"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:262
+msgid "Showing"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:357
+msgid "Showing %1$d of %2$d findings; the remainder is omitted for length."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:229
+msgid "Since the baseline was captured, the registered route keys are unchanged."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:202
+msgid "Stale"
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:177
+msgid "Stale selected rules"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:116
+msgid "Standard wp-login and flows through wp_authenticate(), including ordinary XML-RPC authentication, are covered. REST Application Password authentication is not covered."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:238 src/Admin/FileIntegrityAdmin.php:261 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityDashboard.php:191 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:91
+msgid "Status:"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:193
+msgid "Stored route count:"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:267
+msgid "Suppressed"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:206
+msgid "Surface delta since the baseline"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:181
+msgid "Temporary Login Protection blocks were reset. Aggregate metrics were preserved."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:133
+msgid "The Cerrojo file-editor preference was already in the requested state."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:132
+msgid "The Cerrojo file-editor preference was updated."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:318
+msgid "The REST registry was unavailable, so no baseline was written. No change was made."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:140
+msgid "The REST registry was unavailable, so the current surface could not be summarized."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:317
+msgid "The REST surface baseline was cleared."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:155
+msgid "The active REST catalog is loaded only on this tab and while validating a save. Discovery calls rest_get_server()->get_routes(), which initializes the request-local registry, fires rest_api_init/rest_endpoints, and materializes route options. It never invokes endpoint or permission callbacks."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:264
+msgid "The active REST catalog is unavailable. No change was made."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:143
+msgid "The active REST catalog is unavailable. Normal saving is disabled; Clear all remains available for recovery."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:429
+msgid "The baseline could not be stored. No baseline was changed."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:195
+msgid "The baseline was truncated: it stores only the first 500 registered route keys of the measured total, so keys beyond that bound are missing from every comparison. Recorded total:"
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:96
+msgid "The contextual current user may be unavailable and does not prove causality. Cerrojo sends one plain-text email per recipient so addresses are not disclosed to each other."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:209
+msgid "The current REST registry was unavailable, so the surface delta could not be computed."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:286
+msgid "The cycle could not store a baseline, so no comparison happened."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:283
+msgid "The cycle found changes and tried to send one alert email, but the mail transport failed. These changes remain unacknowledged and are attempted again on the next cycle; no alert went out."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:282
+msgid "The cycle ran and compared the watched files with the stored baseline. There are no changes that still demand an alert in this record; that alone is not proof that the site remains clean."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:113
+msgid "The file editor is available. Cerrojo does not currently manage the lock."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:97
+msgid "The file editor is currently %s because DISALLOW_FILE_EDIT is defined outside Cerrojo. Cerrojo will not override or remove that value."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:112
+msgid "The file editor is disabled by Cerrojo for this request."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:216
+msgid "The live surface exceeds the 500 route-key bound, so the delta compares only the first 500 registered route keys in sorted order."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:281
+msgid "The mail transport accepted one alert for the changes reported here. Acceptance is not proof that the message reached its destination."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:148 src/Admin/CriticalSettingsAlertAdmin.php:155 src/Admin/FileEditorAdmin.php:137 src/Admin/FileIntegrityAdmin.php:438 src/Admin/LoginProtectionAdmin.php:185 src/Admin/PluginActivityAlertAdmin.php:146 src/Admin/RestExposurePanel.php:321 src/Admin/RestRouteControlsAdmin.php:266 src/Admin/SecurityHeadersAdmin.php:443 src/Admin/XmlRpcPingbackAdmin.php:121
+msgid "The request could not be verified. No change was made."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:184 src/Admin/RestRouteControlsAdmin.php:265 src/Admin/XmlRpcPingbackAdmin.php:120
+msgid "The request must use POST. No change was made."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:147 src/Admin/CriticalSettingsAlertAdmin.php:154 src/Admin/FileIntegrityAdmin.php:437 src/Admin/PluginActivityAlertAdmin.php:145
+msgid "The request was malformed or did not use POST. No change was made."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:186
+msgid "The requested Login Protection target or command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:322
+msgid "The requested REST exposure command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:267
+msgid "The requested REST route target or command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:156
+msgid "The requested URL Change Alert target or command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:122
+msgid "The requested XML-RPC pingback target or command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:149
+msgid "The requested administrator account alert target or command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:138 src/Admin/SecurityHeadersAdmin.php:444
+msgid "The requested command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:439
+msgid "The requested file integrity command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:147
+msgid "The requested plugin activity alert target or command is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:446
+msgid "The requested security-header group is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:445
+msgid "The requested security-header target is not supported. No change was made."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:287
+msgid "The scan could not run, so no comparison happened."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:430
+msgid "The scan did not return a usable result, so no baseline was written. No change was made."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:440
+msgid "The selected Cerrojo security-header preferences were already in the requested states."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:439
+msgid "The selected Cerrojo security-header preferences were updated. The current states are shown below."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:262
+msgid "The selected route rules are invalid. No change was made."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:432
+msgid "There are no valid listed findings to acknowledge. No change was made."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:102
+msgid "These are two settings, so successful updates to home and siteurl produce two notices."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:178
+msgid "These saved templates are no longer in the active registry. Keep them checked to retain them or uncheck them to remove them."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:337
+msgid "This cycle reported no individual findings against the baseline."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:184
+msgid "This is a safe-intent policy set, not byte-for-byte parity with the reference plugin. Cerrojo follows safe intent rather than byte parity."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:167
+msgid "This is a tripwire, not an integrity guarantee: a change is not proof of a compromise, and a comparison that reports nothing is not proof that the site is clean. Uploads, WordPress core files, and non-PHP files are not watched, and a bounded scan can leave coverage incomplete."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:100
+msgid "This opt-in, per-site tool monitors successful local updates to the home and siteurl settings only."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:94
+msgid "This opt-in, per-site tool observes successful WordPress lifecycle hooks for these exact events: Administrator role granted, Administrator role removed, and Administrator account deleted."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:101
+msgid "This opt-in, per-site tool progressively delays repeated failed authentication within a 15-minute rolling window. The maximum cooldown is 15 minutes; there are no permanent locks."
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:92
+msgid "This opt-in, per-site tool removes the pingback.ping and pingback.extensions.getPingbacks methods while other authenticated XML-RPC methods remain available. It does not disable xmlrpc.php."
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:94
+msgid "This opt-in, per-site tool will attempt to send plain-text notices for plugin installations and successful activations. Plugin updates are excluded."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:301
+msgid "This panel is read-only except for the stored baseline option. It never invokes permission or endpoint callbacks and makes no security or authorization conclusion."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:134
+msgid "This tool is unavailable on multisite."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:88
+msgid "This tool is unavailable on multisite. Cerrojo does not change the network file-editor policy."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:171
+msgid "Throttled attempts"
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:150
+msgid "Total diagnostics"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:368
+msgid "Transport/content upgrade"
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:111
+msgid "URL Change Alert settings"
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:151
+msgid "URL Change Alert settings were already in the requested state."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:150
+msgid "URL Change Alert settings were updated."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:97
+msgid "URL Change Alerts"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:176
+msgid "Use these controls when you want to change and verify one policy at a time."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:104
+msgid "Watch the executable code of plugins, mu-plugins and themes for additions, removals and changes against a stored baseline."
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:93
+msgid "When enabled, native pingback consumers stop working. Trackbacks, outbound pings, REST, and Application Passwords are not changed."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:320
+msgid "WordPress could not delete the REST surface baseline. The stored value, if any, was left unchanged."
+msgstr ""
+
+#: src/Admin/RestRouteControlsAdmin.php:269
+msgid "WordPress could not save and verify the REST route rules. The displayed state is authoritative."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:136
+msgid "WordPress could not save the Cerrojo file-editor preference."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:442
+msgid "WordPress could not save the Cerrojo security-header preference."
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:188
+msgid "WordPress could not save the Login Protection configuration. The prior state may remain."
+msgstr ""
+
+#: src/Admin/CriticalSettingsAlertAdmin.php:158
+msgid "WordPress could not save the URL Change Alert settings. The prior state may remain."
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:124
+msgid "WordPress could not save the XML-RPC pingback preference. The prior state may remain."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:151
+msgid "WordPress could not save the administrator account alert settings. The prior state may remain."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:436
+msgid "WordPress could not save the configuration. The prior state may remain."
+msgstr ""
+
+#: src/Admin/PluginActivityAlertAdmin.php:149
+msgid "WordPress could not save the plugin activity email alert settings. The prior state may remain."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:319
+msgid "WordPress could not write the REST surface baseline. No baseline was stored."
+msgstr ""
+
+#: src/Admin/FileEditorAdmin.php:84
+msgid "WordPress file editor lock"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:192
+msgid "WordPress version recorded:"
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:89
+msgid "XML-RPC Pingback Protection"
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:119
+msgid "XML-RPC Pingback Protection was already in the requested state."
+msgstr ""
+
+#: src/Admin/XmlRpcPingbackAdmin.php:118
+msgid "XML-RPC Pingback Protection was updated."
+msgstr ""
+
+#: src/Admin/SecurityDashboard.php:68
+msgid "You are not allowed to manage Cerrojo Security Toolkit."
+msgstr ""
+
+#: src/Admin/AdministratorAccountAlertAdmin.php:150 src/Admin/CriticalSettingsAlertAdmin.php:157 src/Admin/FileEditorAdmin.php:139 src/Admin/FileIntegrityAdmin.php:440 src/Admin/LoginProtectionAdmin.php:187 src/Admin/PluginActivityAlertAdmin.php:148 src/Admin/RestRouteControlsAdmin.php:268 src/Admin/SecurityHeadersAdmin.php:450 src/Admin/XmlRpcPingbackAdmin.php:123
+msgid "You are not allowed to perform this action. No change was made."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:351
+msgid "already known (reported earlier or acknowledged); it will not alert again until the acknowledgements are cleared."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:190
+msgid "directives in trial mode."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:188
+msgid "headers without an explicit allowed-origin contract."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:389
+msgid "iframe embedding. Validate every intended embedding flow."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:369
+msgid "isolation"
+msgstr ""
+
+#: src/Admin/LoginProtectionAdmin.php:173
+msgid "last:"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:352
+msgid "not known yet; it alerts again on the next cycle until it is acknowledged."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:283
+msgid "now"
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:262
+msgid "of"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:190
+msgid "or"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:189
+msgid "or CORP"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:186
+msgid "path used by standard front-end responses. Verify wp-admin, wp-login, REST, redirects, static files, cache responses, and every CDN or proxy edge separately."
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:191
+msgid "policy without a configured reporting endpoint."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:261
+msgid "recorded"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:314
+msgid "the capture was truncated at its file bound, so some watched files were not compared"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:189
+msgid "values because they add no meaningful isolation."
+msgstr ""
+
+#: src/Admin/RestExposurePanel.php:283
+msgid "was"
+msgstr ""
+
+#: src/Admin/SecurityHeadersAdmin.php:172
+msgid "workflows."
+msgstr ""
