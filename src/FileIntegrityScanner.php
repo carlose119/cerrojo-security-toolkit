@@ -1,0 +1,206 @@
+<?php
+
+declare(strict_types=1);
+
+namespace BastionSecurityWP;
+
+use Closure;
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use Throwable;
+
+/**
+ * Read-only, bounded enumeration and hashing of the executable code surfaces
+ * (`plugins`, `mu-plugins`, `themes` under the resolved content directory).
+ *
+ * This scanner is a tripwire input, not an integrity guarantee: it never
+ * writes, moves, deletes, or repairs any file, never reads outside the three
+ * surfaces (in particular never `uploads/`), and never calls a WordPress or
+ * PHP global outside an injected default seam. A file whose hash cannot be
+ * read is reported as unverifiable, never as unchanged; bounded or truncated
+ * coverage is stated in the result (`total`, `truncated`, `skipped`,
+ * `unreadable`).
+ *
+ * Each call is independent: no locks, no resumable state, no cross-request
+ * ownership.
+ */
+final class FileIntegrityScanner
+{
+    /** Hard cap on hashed entries; when more candidates exist the exact kept set is the first MAX_FILES in sorted order. */
+    public const MAX_FILES = 2000;
+    /** Hashing is skipped for any candidate reported larger than this, so one outsized file cannot dominate a cycle. */
+    public const MAX_FILE_BYTES = 8388608;
+    /** @var list<string> */
+    public const SURFACES = ['plugins', 'mu-plugins', 'themes'];
+    /** @var list<string> */
+    public const EXTENSIONS = ['php', 'phtml', 'php5', 'php7', 'php8', 'inc'];
+
+    private Closure $contentDir;
+    private Closure $walker;
+    private Closure $hasher;
+    private Closure $sizeOf;
+    private Closure $exists;
+
+    public function __construct(
+        ?callable $contentDir = null,
+        ?callable $walker = null,
+        ?callable $hasher = null,
+        ?callable $sizeOf = null,
+        ?callable $exists = null,
+    ) {
+        $this->contentDir = Closure::fromCallable($contentDir ?? static fn (): string => \defined('WP_CONTENT_DIR') ? (string) \constant('WP_CONTENT_DIR') : '');
+        $this->walker = Closure::fromCallable($walker ?? self::walk(...));
+        $this->hasher = Closure::fromCallable($hasher ?? static fn (string $path): string|false => \hash_file('sha256', $path));
+        $this->sizeOf = Closure::fromCallable($sizeOf ?? static fn (string $path): int|false => \filesize($path));
+        $this->exists = Closure::fromCallable($exists ?? static fn (string $path): bool => \file_exists($path));
+    }
+
+    /**
+     * One bounded, independent capture over the three executable surfaces.
+     * A missing or unreadable surface contributes nothing instead of failing;
+     * the walk order and the returned map are deterministic (sorted by
+     * relative path), so two scans of the same tree yield the same array.
+     *
+     * @return array{files: array<string, string>, total: int, truncated: bool, unreadable: list<string>, skipped: list<string>}
+     *         `files` maps relative path (surface/rest/of/path.php, forward
+     *         slashes, no leading slash) to lowercase SHA-256 and holds at
+     *         most first-MAX_FILES sorted entries; `total` is the real count
+     *         of candidates that matched the executable-surface and
+     *         extension filters before the bundle bound (size-skipped and
+     *         unverifiable candidates are still candidates); `truncated`
+     *         states that candidates beyond MAX_FILES were not hashed;
+     *         `unreadable` lists every candidate whose size or hash could not
+     *         be verified; `skipped` lists every candidate excluded by the
+     *         size bound. All lists and the path map are sorted.
+     */
+    public function scan(): array
+    {
+        try {
+            $root = trim((string) ($this->contentDir)(), "/\\");
+            if ($root === '') {
+                return self::empty();
+            }
+
+            $candidates = [];
+            foreach (self::SURFACES as $surface) {
+                $surfaceDir = $root . DIRECTORY_SEPARATOR . $surface;
+                if (! (bool) ($this->exists)($surfaceDir)) {
+                    continue;
+                }
+
+                foreach (array_values(($this->walker)($surfaceDir)) as $path) {
+                    if (! is_string($path) || $path === '') {
+                        continue;
+                    }
+
+                    $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                    if (! in_array($extension, self::EXTENSIONS, true)) {
+                        continue;
+                    }
+
+                    $relative = self::relativeTo($path, $surfaceDir);
+                    if ($relative === null) {
+                        continue;
+                    }
+
+                    $candidates[$surface . '/' . $relative] = (string) $path;
+                }
+            }
+
+            ksort($candidates, SORT_STRING);
+            $total = count($candidates);
+            $truncated = $total > self::MAX_FILES;
+
+            $files = [];
+            $unreadable = [];
+            $skipped = [];
+            $kept = array_slice($candidates, 0, self::MAX_FILES, true);
+            foreach ($kept as $relative => $path) {
+                $size = ($this->sizeOf)($path);
+                if (! is_int($size) || $size < 0 || $size > self::MAX_FILE_BYTES) {
+                    $skipped[] = (string) $relative;
+                    continue;
+                }
+
+                if (! (bool) ($this->exists)($path)) {
+                    // The file vanished between the walk and the verification: it cannot be read, so it is unverifiable (S12), never unchanged.
+                    $unreadable[] = (string) $relative;
+                    continue;
+                }
+
+                $hash = ($this->hasher)($path);
+                if (! is_string($hash) || preg_match('/^[0-9a-f]{64}$/D', $hash) !== 1) {
+                    $unreadable[] = (string) $relative;
+                    continue;
+                }
+
+                $files[(string) $relative] = $hash;
+            }
+
+            ksort($files, SORT_STRING);
+            sort($skipped, SORT_STRING);
+            sort($unreadable, SORT_STRING);
+
+            return [
+                'files' => $files,
+                'total' => $total,
+                'truncated' => $truncated,
+                'unreadable' => $unreadable,
+                'skipped' => $skipped,
+            ];
+        } catch (Throwable) {
+            return self::empty();
+        }
+    }
+
+    /** @return array{files: array<string, string>, total: int, truncated: bool, unreadable: list<string>, skipped: list<string>} */
+    private static function empty(): array
+    {
+        return ['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => []];
+    }
+
+    /**
+     * Reduce an absolute walked path under `$directory` to a
+     * directory-rooted relative path with forward slashes and no leading
+     * separator. Anything that does not actually live under `$directory`
+     * (a seam yielding an outside path) is dropped.
+     */
+    private static function relativeTo(string $path, string $directory): ?string
+    {
+        $prefix = $directory . DIRECTORY_SEPARATOR;
+        if (! str_starts_with($path, $prefix)) {
+            return null;
+        }
+
+        return str_replace('\\', '/', substr($path, strlen($prefix)));
+    }
+
+    /**
+     * Recursive default walker: leaf regular-file paths under `$directory`,
+     * sorted, so the enumeration is deterministic regardless of the order the
+     * filesystem reports. A missing directory yields an empty list.
+     *
+     * @return list<string>
+     */
+    private static function walk(string $directory): array
+    {
+        if (! is_dir($directory)) {
+            return [];
+        }
+
+        $paths = [];
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iterator as $item) {
+            if ($item->isFile()) {
+                $paths[] = $item->getPathname();
+            }
+        }
+
+        sort($paths, SORT_STRING);
+
+        return $paths;
+    }
+}
