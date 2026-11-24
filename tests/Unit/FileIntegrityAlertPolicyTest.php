@@ -126,6 +126,31 @@ final class FileIntegrityAlertPolicyTest extends TestCase
         self::assertSame('write_failed', $failing->setConfiguration(true, 'a@example.test'));
     }
 
+    public function testAWriteThatReportsNoChangeIsStillASuccessfulForget(): void
+    {
+        $mails = [];
+        $policy = $this->policy([], enabled: true, mails: $mails);
+        $policy->acknowledge(['plugins/a.php' => self::HASH_A]);
+
+        $store = &$this->store;
+        $noop = new FileIntegrityAlertPolicy(
+            new FileIntegrityBaseline(clock: static fn (): int => 1_700_000_000),
+            static fn (): array => [],
+            readOption: static function (string $name) use (&$store): mixed {
+                return $store[$name] ?? null;
+            },
+            writeOption: static function (string $name, array $value) use (&$store): bool {
+                $store[$name] = $value;
+
+                return false;
+            },
+            mail: static fn (array $to, string $subject, string $message): bool => true,
+            clock: static fn (): int => 1_700_000_200,
+        );
+
+        self::assertSame('cleared', $noop->clearAcknowledgements(), 'update_option() reporting "nothing to change" is not a failure.');
+    }
+
     public function testACorruptedStoredResultIsReportedAsAbsentInsteadOfTrusted(): void
     {
         $mails = [];

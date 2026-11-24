@@ -91,6 +91,31 @@ final class FileIntegrityBaselineTest extends TestCase
         );
     }
 
+    public function testACaptureWhoseValueIsAlreadyStoredIsSuccessful(): void
+    {
+        $store = [];
+        $baseline = new FileIntegrityBaseline(
+            readOption: static function () use (&$store): mixed {
+                return $store[FileIntegrityBaseline::OPTION_NAME] ?? null;
+            },
+            // WordPress answers false when the value did not change, and stores it.
+            writeOption: static function (array $value) use (&$store): bool {
+                $store[FileIntegrityBaseline::OPTION_NAME] = $value;
+
+                return false;
+            },
+            deleteOption: static function () use (&$store): bool {
+                unset($store[FileIntegrityBaseline::OPTION_NAME]);
+
+                return true;
+            },
+            clock: static fn (): int => 1_700_000_000,
+        );
+
+        self::assertTrue($baseline->capture(['plugins/a.php' => hash('sha256', 'a')], 1_700_000_000));
+        self::assertTrue($baseline->capture(['plugins/a.php' => hash('sha256', 'a')], 1_700_000_000), 'An identical payload is already the requested state.');
+    }
+
     public function testAValidCaptureSurvivesAStrictReadRoundTripWithoutWritingOrDeleting(): void
     {
         [$writer, $writerStore] = $this->baseline();

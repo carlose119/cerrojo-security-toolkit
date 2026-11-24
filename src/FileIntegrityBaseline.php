@@ -90,7 +90,13 @@ final class FileIntegrityBaseline
                 'truncated' => $normalized['truncated'],
             ];
 
-            return (bool) ($this->writeOption)($payload);
+            if ((bool) ($this->writeOption)($payload)) {
+                return true;
+            }
+
+            // update_option() answers false when the stored value is already
+            // identical, which is exactly the baseline this capture asked for.
+            return $this->read() === $payload;
         } catch (Throwable) {
             return false;
         }

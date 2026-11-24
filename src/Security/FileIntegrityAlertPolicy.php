@@ -558,7 +558,18 @@ final class FileIntegrityAlertPolicy
     private function writeConfiguration(array $config): bool
     {
         try {
-            return (bool) ($this->writeOption)(self::OPTION_NAME, $config);
+            if ((bool) ($this->writeOption)(self::OPTION_NAME, $config)) {
+                return true;
+            }
+
+            // update_option() answers false when the stored value is already
+            // identical, which is the state this write asked for. Confirm what is
+            // stored instead of reporting a failure that never happened.
+            return $this->readConfiguration() === [
+                'enabled' => $config['enabled'],
+                'recipients' => $config['recipients'],
+                'known' => $config['known'],
+            ];
         } catch (Throwable) {
             return false;
         }
