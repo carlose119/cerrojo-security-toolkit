@@ -194,6 +194,33 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringContainsString('baseline_captured', $harness['redirects'][0]);
         }
 
+        public function testBaselineCapturesTheEnumeratedPathsWithNullsForUnhashedPaths(): void
+        {
+            $harness = $this->admin(
+                scanFiles: ['themes/a.php' => self::HASH_A],
+                scanExtra: [
+                    'paths' => ['mu-plugins/watched.php', 'themes/a.php'],
+                    'total' => 2,
+                    'hashed' => 1,
+                    'remaining' => 1,
+                    'pass_complete' => false,
+                    'next_cursor' => 'themes/a.php',
+                ],
+            );
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('baseline'));
+
+            $baseline = $harness['baseline']->read();
+            self::assertIsArray($baseline);
+            self::assertSame(
+                ['mu-plugins/watched.php' => null, 'themes/a.php' => self::HASH_A],
+                $baseline['files'],
+                'The rolling manifest keeps every enumerated path; a path not hashed this cycle is watched with a null hash.'
+            );
+            self::assertSame('themes/a.php', $baseline['cursor'], 'The next cycle must continue after this rotation cursor.');
+        }
+
         public function testBaselineWithoutAUsableScanWritesNothing(): void
         {
             $harness = $this->admin(scanUnavailable: true);
@@ -349,6 +376,79 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringContainsString('stored the first baseline', $decoded);
         }
 
+        public function testAPartialPassStatesItsProgressAndItsDetectionLimit(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/a.php' => self::HASH_A],
+                scanFiles: ['plugins/a.php' => self::HASH_B],
+                scanExtra: [
+                    'paths' => ['plugins/a.php', 'plugins/b.php', 'plugins/c.php'],
+                    'total' => 3,
+                    'hashed' => 1,
+                    'remaining' => 2,
+                    'pass_complete' => false,
+                    'next_cursor' => 'plugins/a.php',
+                ],
+            );
+            $harness['policy']->check();
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringContainsString('hashed 1 of 3 watched files', $decoded);
+            self::assertStringContainsString('2 remain', $decoded);
+            self::assertStringContainsString("detected at that file's next turn", $decoded, 'A partial pass must state that content changes wait for their turn.');
+        }
+
+        public function testACompletedPassDoesNotCarryTheAgingCaveat(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/a.php' => self::HASH_A],
+                scanFiles: ['plugins/a.php' => self::HASH_B],
+                scanExtra: [
+                    'paths' => ['plugins/a.php', 'plugins/b.php'],
+                    'total' => 2,
+                    'hashed' => 2,
+                    'remaining' => 0,
+                    'pass_complete' => true,
+                    'next_cursor' => 'plugins/b.php',
+                ],
+            );
+            $harness['policy']->check();
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringContainsString('completed a full pass', $decoded);
+            self::assertStringNotContainsString("detected at that file's next turn", $decoded);
+        }
+
+        public function testAnAddedPathWithoutAHashIsSaidToBePendingNotAcknowledged(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/a.php' => self::HASH_A],
+                scanFiles: ['plugins/a.php' => self::HASH_A],
+                scanExtra: [
+                    'paths' => ['plugins/a.php', 'plugins/new.php'],
+                    'total' => 2,
+                    'hashed' => 1,
+                    'remaining' => 1,
+                    'pass_complete' => false,
+                ],
+            );
+            $harness['policy']->check();
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringContainsString('plugins/new.php', $decoded);
+            self::assertStringContainsString('has not been hashed yet', $decoded);
+            self::assertStringNotContainsString('it alerts again on the next cycle until it is acknowledged', $decoded);
+        }
+
         /**
          * @param array<string, string>|null $baselineFiles
          * @param array<string, string> $scanFiles
@@ -395,6 +495,7 @@ namespace BastionSecurityWP\Tests\Unit {
                 'nonceActions' => [],
                 'cronClears' => 0,
                 'terminations' => 0,
+                'scanCursors' => [],
             ];
 
             $baseline = new FileIntegrityBaseline(
@@ -413,9 +514,21 @@ namespace BastionSecurityWP\Tests\Unit {
                 },
             );
 
-            $scanExtraDefault = ['files' => $scanFiles, 'total' => count($scanFiles), 'truncated' => false, 'unreadable' => [], 'skipped' => []];
-            $scan = static function () use (&$state, $scanUnavailable, $scanExtra, $scanExtraDefault): ?array {
+            $scanExtraDefault = [
+                'files' => $scanFiles,
+                'paths' => array_keys($scanFiles),
+                'total' => count($scanFiles),
+                'hashed' => count($scanFiles),
+                'remaining' => 0,
+                'pass_complete' => true,
+                'next_cursor' => null,
+                'bytes' => 0,
+                'unreadable' => [],
+                'skipped' => [],
+            ];
+            $scan = static function (?string $cursor = null) use (&$state, $scanUnavailable, $scanExtra, $scanExtraDefault): ?array {
                 ++$state['scans'];
+                $state['scanCursors'][] = $cursor;
 
                 if ($scanUnavailable) {
                     return null;

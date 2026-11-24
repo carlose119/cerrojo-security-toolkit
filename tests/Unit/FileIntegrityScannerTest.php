@@ -49,7 +49,22 @@ final class FileIntegrityScannerTest extends TestCase
             'themes/parent/functions.php' => hash('sha256', '<?php parent;'),
         ], $result['files']);
         self::assertSame(5, $result['total']);
-        self::assertFalse($result['truncated']);
+        self::assertSame(5, $result['hashed']);
+        self::assertSame(0, $result['remaining']);
+        self::assertTrue($result['pass_complete']);
+        self::assertSame('themes/parent/functions.php', $result['next_cursor']);
+        self::assertSame([
+            'mu-plugins/dropin.php',
+            'plugins/acme/acme.php',
+            'plugins/acme/inc/lib-deep.php',
+            'themes/child/style.php',
+            'themes/parent/functions.php',
+        ], $result['paths'], 'The path enumeration is complete on every cycle, whatever slice hashing covers.');
+        self::assertSame([
+            'plugins' => ['total' => 2, 'hashed' => 2],
+            'mu-plugins' => ['total' => 1, 'hashed' => 1],
+            'themes' => ['total' => 2, 'hashed' => 2],
+        ], $result['surfaces']);
         self::assertSame([], $result['unreadable']);
         self::assertSame([], $result['skipped']);
     }
@@ -74,24 +89,6 @@ final class FileIntegrityScannerTest extends TestCase
         self::assertSame(0, $hashed, 'Enumerating must not hash: that is what makes path coverage complete every cycle.');
         self::assertSame(['plugins/a/a.php', 'themes/t/t.php'], array_keys($enumerated['paths']));
         self::assertSame(['plugins' => ['total' => 1], 'mu-plugins' => ['total' => 0], 'themes' => ['total' => 1]], $enumerated['surfaces']);
-    }
-
-    public function testHashPathsStopsAtTheByteBudgetAndSaysSo(): void
-    {
-        $root = $this->tempTree();
-        $this->write($root, 'plugins/a/one.php', str_repeat('a', 100));
-        $this->write($root, 'plugins/a/two.php', str_repeat('b', 100));
-
-        $scanner = $this->makeScanner($root);
-        $enumerated = $scanner->enumerate();
-        self::assertIsArray($enumerated);
-
-        $result = $scanner->hashPaths($enumerated['paths'], 150);
-
-        self::assertSame(['plugins/a/one.php'], array_keys($result['files']));
-        self::assertTrue($result['truncated']);
-        self::assertSame(100, $result['bytes']);
-        self::assertSame(['plugins/a/two.php'], $result['skipped']);
     }
 
     public function testScanIgnoresFilesWhoseExtensionIsNotExecutable(): void
@@ -195,30 +192,142 @@ final class FileIntegrityScannerTest extends TestCase
             'themes/t/t.php' => hash('sha256', 't'),
         ], $result['files']);
         self::assertSame(2, $result['total']);
-        self::assertFalse($result['truncated']);
+        self::assertTrue($result['pass_complete']);
     }
 
-    public function testScanTruncatesAtMaxFilesAndStillReportsTheRealTotal(): void
+    /** One candidate cost that fits the per-file bound and a 32-file byte budget. */
+    private const FULL_FILE_SIZE = FileIntegrityScanner::MAX_FILE_BYTES;
+
+    /** @return list<string> */
+    private function packKeys(int $count): array
     {
-        $root = $this->tempTree();
-        $candidateCount = FileIntegrityScanner::MAX_FILES + 2;
-        for ($index = 0; $index < $candidateCount; $index++) {
-            $this->write($root, 'plugins/p/pack-' . sprintf('%04d', $index) . '.php', 'body-' . $index);
+        $keys = [];
+        foreach (range(1, $count) as $index) {
+            $keys[] = sprintf('plugins/p%02d.php', $index);
         }
 
-        $result = $this->makeScanner($root)->scan();
+        return $keys;
+    }
 
-        self::assertTrue($result['truncated']);
-        self::assertSame($candidateCount, $result['total']);
-        self::assertCount(FileIntegrityScanner::MAX_FILES, $result['files']);
-        self::assertSame([], $result['skipped']);
-        self::assertSame([], $result['unreadable']);
-        // The kept entries are the first MAX_FILES candidates in sorted order.
-        $expectedKeys = [];
-        for ($index = 0; $index < FileIntegrityScanner::MAX_FILES; $index++) {
-            $expectedKeys[] = 'plugins/p/pack-' . sprintf('%04d', $index) . '.php';
-        }
-        self::assertSame($expectedKeys, array_keys($result['files']));
+    public function testRotationContinuesAfterTheCursorAndWraps(): void
+    {
+        // Thirty-two candidates of MAX_FILE_BYTES exactly fill the byte budget;
+        // the thirty-third stops the pass.
+        $keys = $this->packKeys(35);
+        $scanner = $this->fakeScanner($keys, sizeOf: static fn (): int => self::FULL_FILE_SIZE);
+
+        $first = $scanner->scan('plugins/p02.php');
+
+        $expectedFirst = array_map(static fn (int $index): string => sprintf('plugins/p%02d.php', $index), range(3, 34));
+        self::assertSame($expectedFirst, array_keys($first['files']), 'Hashing starts at the first key after the cursor.');
+        self::assertSame(32, $first['hashed']);
+        self::assertSame(3, $first['remaining']);
+        self::assertFalse($first['pass_complete']);
+        self::assertSame(32 * self::FULL_FILE_SIZE, $first['bytes']);
+        self::assertSame([], $first['skipped']);
+        self::assertSame([], $first['unreadable']);
+
+        $second = $scanner->scan('plugins/p34.php');
+
+        $expectedSecond = array_map(static fn (int $index): string => sprintf('plugins/p%02d.php', $index), range(1, 31));
+        self::assertSame([...$expectedSecond, 'plugins/p35.php'], array_keys($second['files']), 'At the end of the sorted list, the rotation wraps to the first key.');
+        self::assertSame(32, $second['hashed']);
+        self::assertSame('plugins/p31.php', $second['next_cursor']);
+    }
+
+    public function testAnUnknownCursorStartsFromTheFirstKey(): void
+    {
+        $keys = $this->packKeys(35);
+        $scanner = $this->fakeScanner($keys, sizeOf: static fn (): int => self::FULL_FILE_SIZE);
+
+        $result = $scanner->scan('plugins/not-enumerated.php');
+
+        $expected = array_map(static fn (int $index): string => sprintf('plugins/p%02d.php', $index), range(1, 32));
+        self::assertSame($expected, array_keys($result['files']), 'A cursor the enumeration does not know must start a fresh pass from the first key.');
+        self::assertSame('plugins/p32.php', $result['next_cursor']);
+    }
+
+    public function testTheByteBudgetStopsAPassAndTheNextCycleResumesAfterTheLastHashedKey(): void
+    {
+        $keys = $this->packKeys(33);
+        $scanner = $this->fakeScanner($keys, sizeOf: static fn (): int => self::FULL_FILE_SIZE);
+
+        $first = $scanner->scan();
+        $expected = array_map(static fn (int $index): string => sprintf('plugins/p%02d.php', $index), range(1, 32));
+        self::assertSame($expected, array_keys($first['files']), 'The byte budget stops the pass before the thirty-third file.');
+        self::assertSame('plugins/p32.php', $first['next_cursor']);
+
+        $second = $scanner->scan($first['next_cursor']);
+
+        // The pass resumes at p33 (exactly after the last hashed key) and then
+        // keeps filling the budget, wrapping to the first keys of the list.
+        $expected = array_map(static fn (int $index): string => sprintf('plugins/p%02d.php', $index), range(1, 31));
+        self::assertSame([...$expected, 'plugins/p33.php'], array_keys($second['files']), 'The next cycle resumes exactly after the last hashed key, without overlap or gaps.');
+        self::assertSame('plugins/p31.php', $second['next_cursor']);
+    }
+
+    public function testPathsStaysCompleteWhileFilesHoldsOnlyTheSlice(): void
+    {
+        $keys = $this->packKeys(40);
+        $scanner = $this->fakeScanner($keys, sizeOf: static fn (): int => self::FULL_FILE_SIZE);
+
+        $result = $scanner->scan();
+
+        self::assertSame($keys, $result['paths'], 'The path list is the complete, globally sorted enumeration.');
+        self::assertCount(32, $result['files'], 'The files map holds only what this cycle hashed.');
+        self::assertSame(40, $result['total']);
+        self::assertSame(32, $result['hashed']);
+        self::assertSame(8, $result['remaining']);
+        self::assertFalse($result['pass_complete']);
+    }
+
+    public function testAFullPassHashesEveryCandidateAndReportsCompletion(): void
+    {
+        $keys = ['themes/b/b.php', 'plugins/a/a.php', 'mu-plugins/m/m.php'];
+        $scanner = $this->fakeScanner($keys);
+
+        $result = $scanner->scan();
+
+        self::assertSame(['mu-plugins/m/m.php', 'plugins/a/a.php', 'themes/b/b.php'], $result['paths']);
+        self::assertSame(['mu-plugins/m/m.php', 'plugins/a/a.php', 'themes/b/b.php'], array_keys($result['files']));
+        self::assertSame(3, $result['hashed']);
+        self::assertSame(0, $result['remaining']);
+        self::assertTrue($result['pass_complete']);
+        self::assertSame('themes/b/b.php', $result['next_cursor'], 'The cursor names the last key visited in rotation order.');
+    }
+
+    public function testAnUnreadableCandidateIsStillVisitedAndAdvancesTheCursor(): void
+    {
+        $keys = $this->packKeys(34);
+        $scanner = $this->fakeScanner(
+            $keys,
+            sizeOf: static fn (string $path): int|false => str_ends_with($path, 'p02.php') ? false : self::FULL_FILE_SIZE,
+        );
+
+        $result = $scanner->scan();
+
+        self::assertSame(['plugins/p02.php'], $result['unreadable'], 'An unreadable probe is unverifiable, not a budget skip.');
+        $expected = array_map(static fn (int $index): string => sprintf('plugins/p%02d.php', $index), array_merge([1], range(3, 33)));
+        self::assertSame($expected, array_keys($result['files']));
+        self::assertSame('plugins/p33.php', $result['next_cursor'], 'An unreadable candidate was visited, so the rotation continues after it.');
+        self::assertSame(1, $result['remaining'], 'The budget-stopped candidate was not visited.');
+    }
+
+    public function testAnOversizedCandidateIsSkippedReportedAndStillAdvancesTheCursor(): void
+    {
+        $keys = $this->packKeys(34);
+        $scanner = $this->fakeScanner(
+            $keys,
+            sizeOf: static fn (string $path): int|false => str_ends_with($path, 'p02.php') ? FileIntegrityScanner::MAX_FILE_BYTES + 1 : self::FULL_FILE_SIZE,
+        );
+
+        $result = $scanner->scan();
+
+        self::assertSame(['plugins/p02.php'], $result['skipped']);
+        $expected = array_map(static fn (int $index): string => sprintf('plugins/p%02d.php', $index), array_merge([1], range(3, 33)));
+        self::assertSame($expected, array_keys($result['files']));
+        self::assertSame('plugins/p33.php', $result['next_cursor'], 'An oversized candidate was visited, so the rotation continues after it.');
+        self::assertSame(1, $result['remaining'], 'The budget-stopped candidate was not visited.');
     }
 
     public function testAFileLargerThanMaxFileBytesIsSkippedReportedAndNeverHashed(): void
@@ -314,7 +423,7 @@ final class FileIntegrityScannerTest extends TestCase
 
         $result = $this->makeScanner($root)->scan();
 
-        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => [], 'surfaces' => ['plugins' => ['total' => 0, 'hashed' => 0], 'mu-plugins' => ['total' => 0, 'hashed' => 0], 'themes' => ['total' => 0, 'hashed' => 0]]], $result);
+        self::assertSame(['files' => [], 'paths' => [], 'total' => 0, 'hashed' => 0, 'remaining' => 0, 'pass_complete' => true, 'next_cursor' => null, 'bytes' => 0, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => [], 'surfaces' => ['plugins' => ['total' => 0, 'hashed' => 0], 'mu-plugins' => ['total' => 0, 'hashed' => 0], 'themes' => ['total' => 0, 'hashed' => 0]]], $result);
     }
 
     public function testDefaultContentDirectoryResolverYieldsAnEmptyResultWhenWpContentDirIsNotDefined(): void
@@ -323,7 +432,7 @@ final class FileIntegrityScannerTest extends TestCase
 
         $result = (new FileIntegrityScanner())->scan();
 
-        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => [], 'surfaces' => ['plugins' => ['total' => 0, 'hashed' => 0], 'mu-plugins' => ['total' => 0, 'hashed' => 0], 'themes' => ['total' => 0, 'hashed' => 0]]], $result);
+        self::assertSame(['files' => [], 'paths' => [], 'total' => 0, 'hashed' => 0, 'remaining' => 0, 'pass_complete' => true, 'next_cursor' => null, 'bytes' => 0, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => [], 'surfaces' => ['plugins' => ['total' => 0, 'hashed' => 0], 'mu-plugins' => ['total' => 0, 'hashed' => 0], 'themes' => ['total' => 0, 'hashed' => 0]]], $result);
     }
 
     public function testAnUnreadableContentDirectoryReturnsAnEmptyResultWithoutThrowing(): void
@@ -415,6 +524,39 @@ final class FileIntegrityScannerTest extends TestCase
             hasher: $hasher ?? static fn (string $path): string|false => hash_file('sha256', $path),
             sizeOf: $sizeOf ?? static fn (string $path): int|false => filesize($path),
             exists: $exists ?? static fn (string $path): bool => file_exists($path),
+        );
+    }
+
+    /**
+     * A scanner seated over a synthetic enumeration: the walker "finds" exactly
+     * the named candidate keys, sizes and hashes come from the seams, so a
+     * rotation pass over the byte budget can be exercised without writing 268 MB
+     * of real files.
+     *
+     * @param list<string> $keys relative candidate keys, e.g. 'plugins/a.php'
+     */
+    private function fakeScanner(
+        array $keys,
+        ?callable $sizeOf = null,
+        ?callable $hasher = null,
+    ): FileIntegrityScanner {
+        return new FileIntegrityScanner(
+            contentDir: static fn (): string => '/site/wp-content',
+            walker: static function (string $directory) use ($keys): array {
+                $normalized = str_replace('\\', '/', $directory);
+                $surface = substr($normalized, (int) strrpos($normalized, '/') + 1);
+                $found = [];
+                foreach ($keys as $key) {
+                    if (str_starts_with($key, $surface . '/')) {
+                        $found[] = $directory . '/' . substr($key, strlen($surface) + 1);
+                    }
+                }
+
+                return $found;
+            },
+            hasher: $hasher ?? static fn (string $path): string => hash('sha256', $path),
+            sizeOf: $sizeOf ?? static fn (string $path): int => 10,
+            exists: static fn (): bool => true,
         );
     }
 

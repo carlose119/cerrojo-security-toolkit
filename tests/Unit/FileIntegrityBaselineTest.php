@@ -61,6 +61,12 @@ final class FileIntegrityBaselineTest extends TestCase
         ];
     }
 
+    /** @return list<string> */
+    private function paths(): array
+    {
+        return array_keys($this->files());
+    }
+
     public function testOptionNameIsADerivableBastionSecurityWpOptionLiteral(): void
     {
         self::assertSame('bastion_security_wp_file_integrity_baseline', FileIntegrityBaseline::OPTION_NAME);
@@ -70,10 +76,10 @@ final class FileIntegrityBaselineTest extends TestCase
     {
         [$baseline, $store] = $this->baseline();
 
-        self::assertTrue($baseline->capture($this->files()));
+        self::assertTrue($baseline->capture($this->files(), $this->paths()));
         self::assertSame(1, $store->writes);
         self::assertSame([
-            'schema' => 2,
+            'schema' => 3,
             'captured_at' => self::CLOCK,
             'files' => [
                 'mu-plugins/sentinel.php' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -90,6 +96,55 @@ final class FileIntegrityBaselineTest extends TestCase
             array_keys($store->value),
             'The stored payload must keep the documented exact key order.',
         );
+    }
+
+    public function testCaptureStoresTheCursorOfThisCycle(): void
+    {
+        [$baseline, $store] = $this->baseline();
+
+        self::assertTrue($baseline->capture(
+            ['plugins/hello.php' => str_repeat('c', 64)],
+            ['plugins/hello.php', 'mu-plugins/sentinel.php'],
+            'plugins/hello.php',
+        ));
+
+        self::assertSame('plugins/hello.php', $store->value['cursor'], 'The next cycle must know where to continue.');
+        // Every enumerated path is stored; the slice hashed this cycle keeps its
+        // hash, the others are watched with a null hash until their turn.
+        self::assertSame([
+            'mu-plugins/sentinel.php' => null,
+            'plugins/hello.php' => str_repeat('c', 64),
+        ], $store->value['files']);
+        self::assertSame(2, $store->value['total'], 'The total is the count of watched paths, hashed or not.');
+    }
+
+    public function testTheMergeKeepsAnUnvisitedPathsPreviousHashAndDropsAPathThatLeftTheSite(): void
+    {
+        [$baseline, $store] = $this->baseline();
+        self::assertTrue($baseline->capture(
+            [
+                'mu-plugins/kept-null.php' => null,
+                'plugins/a.php' => str_repeat('a', 64),
+                'plugins/gone.php' => str_repeat('9', 64),
+            ],
+            ['mu-plugins/kept-null.php', 'plugins/a.php', 'plugins/gone.php'],
+        ));
+
+        self::assertTrue($baseline->capture(
+            // Only one path is hashed this cycle; the others keep what they had.
+            ['plugins/b.php' => str_repeat('b', 64)],
+            ['mu-plugins/kept-null.php', 'plugins/a.php', 'plugins/b.php'],
+            'plugins/b.php',
+        ));
+
+        self::assertSame([
+            'mu-plugins/kept-null.php' => null,
+            'plugins/a.php' => str_repeat('a', 64),
+            'plugins/b.php' => str_repeat('b', 64),
+        ], $store->value['files'], 'A path not hashed this cycle keeps its previous hash.');
+        self::assertFalse($store->value['truncated'], 'Three watched paths stay under the footprint guard.');
+        self::assertArrayNotHasKey('plugins/gone.php', $store->value['files'], 'A path no longer enumerated must leave the manifest.');
+        self::assertSame(3, $store->value['total']);
     }
 
     public function testACaptureWhoseValueIsAlreadyStoredIsSuccessful(): void
@@ -113,14 +168,15 @@ final class FileIntegrityBaselineTest extends TestCase
             clock: static fn (): int => 1_700_000_000,
         );
 
-        self::assertTrue($baseline->capture(['plugins/a.php' => hash('sha256', 'a')], 1_700_000_000));
-        self::assertTrue($baseline->capture(['plugins/a.php' => hash('sha256', 'a')], 1_700_000_000), 'An identical payload is already the requested state.');
+        $hashes = ['plugins/a.php' => hash('sha256', 'a')];
+        self::assertTrue($baseline->capture($hashes, ['plugins/a.php'], null, 1_700_000_000));
+        self::assertTrue($baseline->capture($hashes, ['plugins/a.php'], null, 1_700_000_000), 'An identical payload is already the requested state.');
     }
 
     public function testAValidCaptureSurvivesAStrictReadRoundTripWithoutWritingOrDeleting(): void
     {
         [$writer, $writerStore] = $this->baseline();
-        self::assertTrue($writer->capture($this->files(), self::CLOCK));
+        self::assertTrue($writer->capture($this->files(), $this->paths(), null, self::CLOCK));
 
         [$reader, $readerStore] = $this->baseline();
         $readerStore->value = $writerStore->value;
@@ -136,17 +192,17 @@ final class FileIntegrityBaselineTest extends TestCase
     {
         [$baseline, $store] = $this->baseline();
 
-        self::assertTrue($baseline->capture($this->files(), self::CLOCK + 86400));
+        self::assertTrue($baseline->capture($this->files(), $this->paths(), null, self::CLOCK + 86400));
         self::assertSame(self::CLOCK + 86400, $store->value['captured_at']);
     }
 
-    public function testCaptureWithAnEmptyFileMapStoresAnHonestEmptyBaseline(): void
+    public function testCaptureWithAnEmptyEnumerationStoresAnHonestEmptyBaseline(): void
     {
         [$baseline, $store] = $this->baseline();
 
-        self::assertTrue($baseline->capture([]));
+        self::assertTrue($baseline->capture([], []));
         self::assertSame([
-            'schema' => 2,
+            'schema' => 3,
             'captured_at' => self::CLOCK,
             'files' => [],
             'total' => 0,
@@ -171,8 +227,8 @@ final class FileIntegrityBaselineTest extends TestCase
                 clock: static fn (): mixed => $brokenClock,
             );
 
-            self::assertFalse($baseline->capture($this->files()), 'Expected capture to fail for a broken clock: ' . var_export($brokenClock, true));
-            self::assertFalse($baseline->capture($this->files(), 5), 'Expected an explicit now to be refused too for a broken clock: ' . var_export($brokenClock, true));
+            self::assertFalse($baseline->capture($this->files(), $this->paths()), 'Expected capture to fail for a broken clock: ' . var_export($brokenClock, true));
+            self::assertFalse($baseline->capture($this->files(), $this->paths(), null, 5), 'Expected an explicit now to be refused too for a broken clock: ' . var_export($brokenClock, true));
             self::assertSame(0, $store->writes, 'A broken clock must never write.');
         }
     }
@@ -181,8 +237,8 @@ final class FileIntegrityBaselineTest extends TestCase
     {
         [$baseline, $store] = $this->baseline();
 
-        self::assertFalse($baseline->capture($this->files(), self::CLOCK + 86401));
-        self::assertFalse($baseline->capture($this->files(), PHP_INT_MAX));
+        self::assertFalse($baseline->capture($this->files(), $this->paths(), null, self::CLOCK + 86401));
+        self::assertFalse($baseline->capture($this->files(), $this->paths(), null, PHP_INT_MAX));
         self::assertSame(0, $store->writes);
     }
 
@@ -193,8 +249,18 @@ final class FileIntegrityBaselineTest extends TestCase
         $files = $this->files();
         $files[7] = str_repeat('a', 64);
 
-        self::assertFalse($baseline->capture($files));
+        self::assertFalse($baseline->capture($files, array_keys($files)));
         self::assertSame(0, $store->writes);
+    }
+
+    public function testCaptureRefusesAnEnumeratedPathThatIsUnsafeAndWritesNothing(): void
+    {
+        foreach (['/plugins/hello.php', 'plugins/../secret.php', 'plugins\\hello.php', '', 'plugins/' . str_repeat("\u{00e9}", 197)] as $hostile) {
+            [$baseline, $store] = $this->baseline();
+
+            self::assertFalse($baseline->capture($this->files(), [$hostile], null), 'Expected refusal for enumerated path: ' . $hostile);
+            self::assertSame(0, $store->writes, 'A malformed enumerated path must never write.');
+        }
     }
 
     public function testCaptureRefusesAPathExceedingTheFourHundredByteBoundAndWritesNothing(): void
@@ -208,11 +274,11 @@ final class FileIntegrityBaselineTest extends TestCase
         self::assertSame(400, strlen($atBound));
         self::assertSame(401, strlen($overBound));
 
-        self::assertTrue($baseline->capture([$atBound => str_repeat('a', 64)]));
+        self::assertTrue($baseline->capture([$atBound => str_repeat('a', 64)], [$atBound]));
         self::assertSame(1, $store->writes);
 
         [$rejector, $rejectStore] = $this->baseline();
-        self::assertFalse($rejector->capture([$overBound => str_repeat('a', 64)]));
+        self::assertFalse($rejector->capture([], [$overBound]));
         self::assertSame(0, $rejectStore->writes);
     }
 
@@ -220,7 +286,7 @@ final class FileIntegrityBaselineTest extends TestCase
     {
         [$baseline, $store] = $this->baseline();
 
-        self::assertFalse($baseline->capture(['/plugins/hello.php' => str_repeat('a', 64)]));
+        self::assertFalse($baseline->capture(['/plugins/hello.php' => str_repeat('a', 64)], []));
         self::assertSame(0, $store->writes);
     }
 
@@ -228,7 +294,7 @@ final class FileIntegrityBaselineTest extends TestCase
     {
         foreach (['plugins/../secret.php', '../outside.php', 'plugins/a..b.php'] as $hostile) {
             [$baseline, $store] = $this->baseline();
-            self::assertFalse($baseline->capture([$hostile => str_repeat('a', 64)]), 'Expected refusal for: ' . $hostile);
+            self::assertFalse($baseline->capture([$hostile => str_repeat('a', 64)], []), 'Expected refusal for: ' . $hostile);
             self::assertSame(0, $store->writes, 'Traversal in ' . $hostile . ' must never write.');
         }
     }
@@ -237,7 +303,7 @@ final class FileIntegrityBaselineTest extends TestCase
     {
         [$baseline, $store] = $this->baseline();
 
-        self::assertFalse($baseline->capture(['plugins\\hello.php' => str_repeat('a', 64)]));
+        self::assertFalse($baseline->capture(['plugins\\hello.php' => str_repeat('a', 64)], []));
         self::assertSame(0, $store->writes);
     }
 
@@ -250,15 +316,33 @@ final class FileIntegrityBaselineTest extends TestCase
             str_repeat('g', 64),
             str_repeat('a', 63) . ' ',
             42,
-            null,
             1.5,
             true,
         ] as $badHash) {
             [$baseline, $store] = $this->baseline();
 
-            self::assertFalse($baseline->capture(['plugins/hello.php' => $badHash]), 'Expected refusal for hash: ' . var_export($badHash, true));
+            self::assertFalse($baseline->capture(['plugins/hello.php' => $badHash], ['plugins/hello.php']), 'Expected refusal for hash: ' . var_export($badHash, true));
             self::assertSame(0, $store->writes, 'A malformed hash must never write.');
         }
+    }
+
+    public function testCaptureAcceptsANullHashForAWatchedPathNotYetHashed(): void
+    {
+        [$baseline, $store] = $this->baseline();
+
+        self::assertTrue($baseline->capture([], ['plugins/hello.php']));
+        self::assertSame(['plugins/hello.php' => null], $store->value['files']);
+        self::assertSame(1, $store->value['total']);
+        self::assertFalse($store->value['truncated'], 'One watched path stays under the footprint guard.');
+    }
+
+    public function testCaptureRefusesACursorThatIsNotASafePathAndWritesNothing(): void
+    {
+        [$baseline, $store] = $this->baseline();
+
+        self::assertFalse($baseline->capture([], [], '../escape.php'));
+        self::assertFalse($baseline->capture([], [], '/plugins/absolute.php'));
+        self::assertSame(0, $store->writes);
     }
 
     public function testCaptureStoresNothingWhenTheUnderlyingWriteFailsAndReportsFailure(): void
@@ -276,7 +360,7 @@ final class FileIntegrityBaselineTest extends TestCase
             clock: static fn (): int => self::CLOCK,
         );
 
-        self::assertFalse($baseline->capture($this->files()));
+        self::assertFalse($baseline->capture($this->files(), $this->paths()));
         self::assertSame(1, $store->writes);
         self::assertNull($store->value);
     }
@@ -301,40 +385,24 @@ final class FileIntegrityBaselineTest extends TestCase
         ], $normalized);
     }
 
-    public function testNormalizeBoundsToMaxFilesKeepsTheRealTotalAndSetsTruncated(): void
+    public function testNormalizeAcceptsNullHashesForWatchedButUnhashedPaths(): void
     {
-        $files = [];
-        foreach (range(1, 2002) as $index) {
-            $files[sprintf('plugins/r-%04d.php', $index)] = str_repeat('a', 64);
-        }
+        $normalized = FileIntegrityBaseline::normalize([
+            'plugins/watched.php' => null,
+            'themes/two.php' => str_repeat('b', 64),
+        ]);
 
-        $normalized = FileIntegrityBaseline::normalize($files);
-
-        self::assertSame(2000, count($normalized['files']));
-        self::assertSame(2002, $normalized['total'], 'The total must stay the real count of valid entries seen.');
-        self::assertTrue($normalized['truncated']);
-
-        $expectedFirst = [];
-        foreach (range(1, 2000) as $index) {
-            $expectedFirst[sprintf('plugins/r-%04d.php', $index)] = str_repeat('a', 64);
-        }
-        self::assertSame($expectedFirst, $normalized['files'], 'Truncation must keep the first MAX_FILES paths in sorted order.');
+        self::assertSame([
+            'files' => [
+                'plugins/watched.php' => null,
+                'themes/two.php' => str_repeat('b', 64),
+            ],
+            'total' => 2,
+            'truncated' => false,
+        ], $normalized);
     }
 
-    public function testNormalizeReportsNotTruncatedAtExactlyMaxFiles(): void
-    {
-        $files = [];
-        foreach (range(1, 2000) as $index) {
-            $files[sprintf('plugins/r-%04d.php', $index)] = str_repeat('a', 64);
-        }
-
-        $normalized = FileIntegrityBaseline::normalize($files);
-
-        self::assertSame(2000, $normalized['total']);
-        self::assertFalse($normalized['truncated']);
-    }
-
-    public function testNormalizeDropsMalformedEntriesWithoutThrowing(): void
+    public function testNormalizeKeepsNullAndDropsMalformedEntriesWithoutThrowing(): void
     {
         $normalized = FileIntegrityBaseline::normalize([
             7 => str_repeat('a', 64),
@@ -346,19 +414,56 @@ final class FileIntegrityBaselineTest extends TestCase
             'plugins\\backslash.php' => str_repeat('a', 64),
             '' => str_repeat('a', 64),
             'plugins/nonstring-hash.php' => 42,
+            'plugins/watched.php' => null,
         ]);
 
         self::assertSame([
-            'files' => ['plugins/ok.php' => str_repeat('a', 64)],
-            'total' => 1,
+            'files' => [
+                'plugins/ok.php' => str_repeat('a', 64),
+                'plugins/watched.php' => null,
+            ],
+            'total' => 2,
             'truncated' => false,
         ], $normalized);
+    }
+
+    public function testNormalizeBoundsToMaxPathsKeepsTheRealTotalAndSetsTruncated(): void
+    {
+        $files = [];
+        foreach (range(1, FileIntegrityBaseline::MAX_PATHS + 2) as $index) {
+            $files[sprintf('plugins/r-%06d.php', $index)] = str_repeat('a', 64);
+        }
+
+        $normalized = FileIntegrityBaseline::normalize($files);
+
+        self::assertSame(FileIntegrityBaseline::MAX_PATHS, count($normalized['files']));
+        self::assertSame(FileIntegrityBaseline::MAX_PATHS + 2, $normalized['total'], 'The total must stay the real count of valid entries seen.');
+        self::assertTrue($normalized['truncated'], 'Beyond the footprint guard the manifest reports bounded coverage.');
+
+        $expectedFirst = [];
+        foreach (range(1, FileIntegrityBaseline::MAX_PATHS) as $index) {
+            $expectedFirst[sprintf('plugins/r-%06d.php', $index)] = str_repeat('a', 64);
+        }
+        self::assertSame($expectedFirst, $normalized['files'], 'The footprint guard keeps the first MAX_PATHS paths in sorted order.');
+    }
+
+    public function testNormalizeReportsNotTruncatedAtExactlyMaxPaths(): void
+    {
+        $files = [];
+        foreach (range(1, FileIntegrityBaseline::MAX_PATHS) as $index) {
+            $files[sprintf('plugins/r-%06d.php', $index)] = str_repeat('a', 64);
+        }
+
+        $normalized = FileIntegrityBaseline::normalize($files);
+
+        self::assertSame(FileIntegrityBaseline::MAX_PATHS, $normalized['total']);
+        self::assertFalse($normalized['truncated']);
     }
 
     public function testReadAcceptsAValidStoredPayloadAndYieldsItUnchanged(): void
     {
         $payload = [
-            'schema' => 2,
+            'schema' => 3,
             'captured_at' => 1_000,
             'files' => ['plugins/a.php' => str_repeat('a', 64)],
             'total' => 1,
@@ -372,18 +477,61 @@ final class FileIntegrityBaselineTest extends TestCase
         self::assertSame(0, $store->writes);
         self::assertSame(0, $store->deletes);
 
-        // A truncated payload with a real total above the cap also validates.
+        // A payload bounded by the footprint guard with a real total above the
+        // cap also validates, including null hashes for watched paths.
         $truncated = $this->truncatedPayload();
         [$reader, $store] = $this->baseline();
         $store->value = $truncated;
         self::assertSame($truncated, $reader->read());
     }
 
+    public function testASchemaThreeManifestWithNullHashesRoundTrips(): void
+    {
+        $payload = [
+            'schema' => 3,
+            'captured_at' => 1_000,
+            'files' => [
+                'plugins/a.php' => str_repeat('a', 64),
+                'plugins/watched.php' => null,
+            ],
+            'total' => 2,
+            'truncated' => false,
+            'cursor' => 'plugins/a.php',
+        ];
+        [$reader, $store] = $this->baseline();
+        $store->value = $payload;
+
+        self::assertSame($payload, $reader->read(), 'A watched path without a hash is a valid rolling manifest state.');
+        self::assertSame(0, $store->writes);
+        self::assertSame(0, $store->deletes);
+    }
+
+    public function testASchemaTwoManifestIsUpgradedToSchemaThreeInsteadOfDiscarded(): void
+    {
+        $stored = [
+            'schema' => 2,
+            'captured_at' => 1_000,
+            'files' => ['plugins/a.php' => str_repeat('a', 64)],
+            'total' => 1,
+            'truncated' => false,
+            'cursor' => 'plugins/a.php',
+        ];
+        [$reader, $store] = $this->baseline();
+        $store->value = $stored;
+
+        $read = $reader->read();
+        self::assertIsArray($read);
+        self::assertSame(3, $read['schema'], 'A schema-2 manifest must upgrade, not be discarded.');
+        self::assertSame(['plugins/a.php' => str_repeat('a', 64)], $read['files']);
+        self::assertSame('plugins/a.php', $read['cursor']);
+        self::assertSame(0, $store->writes, 'Upgrading a manifest must not rewrite the option.');
+    }
+
     public function testTheCursorRoundTripsAndALegacyManifestIsReadAsNoCursor(): void
     {
         [$baseline, $store] = $this->baseline();
 
-        self::assertTrue($baseline->capture(['plugins/b.php' => str_repeat('b', 64)], self::CLOCK, 'plugins/b.php'));
+        self::assertTrue($baseline->capture(['plugins/b.php' => str_repeat('b', 64)], ['plugins/b.php'], 'plugins/b.php', self::CLOCK));
         self::assertSame('plugins/b.php', $store->value['cursor'] ?? null);
 
         $read = $baseline->read();
@@ -412,6 +560,15 @@ final class FileIntegrityBaselineTest extends TestCase
     public function testReadYieldsNullForEveryMalformedStoredShapeAndNeverWritesOrDeletes(): void
     {
         $valid = [
+            'schema' => 3,
+            'captured_at' => 1_000,
+            'files' => ['plugins/a.php' => str_repeat('a', 64)],
+            'total' => 1,
+            'truncated' => false,
+            'cursor' => null,
+        ];
+
+        $schema2 = [
             'schema' => 2,
             'captured_at' => 1_000,
             'files' => ['plugins/a.php' => str_repeat('a', 64)],
@@ -426,7 +583,7 @@ final class FileIntegrityBaselineTest extends TestCase
 
         $truncatedAtBound = $this->truncatedPayload();
         $truncatedUnderTotal = $this->truncatedPayload();
-        $truncatedUnderTotal['total'] = 2000;
+        $truncatedUnderTotal['total'] = FileIntegrityBaseline::MAX_PATHS;
 
         $malformed = [
             'not an array at all',
@@ -439,8 +596,9 @@ final class FileIntegrityBaselineTest extends TestCase
             ['captured_at' => 1_000, 'schema' => 1, 'files' => [], 'total' => 0, 'truncated' => false],
             array_merge($valid, ['cursor' => '../escape.php']),
             array_merge($valid, ['extra' => true]),
-            array_merge($valid, ['schema' => 3]),
+            array_merge($valid, ['schema' => 4]),
             array_merge($valid, ['schema' => '1']),
+            array_merge($valid, ['schema' => null]),
             array_merge($valid, ['captured_at' => 0]),
             array_merge($valid, ['captured_at' => '1_000']),
             array_merge($valid, ['captured_at' => 1_000.0]),
@@ -452,7 +610,8 @@ final class FileIntegrityBaselineTest extends TestCase
             array_merge($valid, ['files' => ['plugins/a.php' => str_repeat('A', 64)]]),
             array_merge($valid, ['files' => ['plugins/a.php' => str_repeat('g', 64)]]),
             array_merge($valid, ['files' => ['plugins/a.php' => 42]]),
-            array_merge($valid, ['files' => ['plugins/a.php' => null]]),
+            array_merge($valid, ['files' => ['plugins/a.php' => 1.5]]),
+            array_merge($valid, ['files' => ['plugins/a.php' => '']]),
             array_merge($valid, ['files' => ['/plugins/a.php' => str_repeat('a', 64)]]),
             array_merge($valid, ['files' => ['plugins/../a.php' => str_repeat('a', 64)]]),
             array_merge($valid, ['files' => ['plugins\\a.php' => str_repeat('a', 64)]]),
@@ -466,6 +625,9 @@ final class FileIntegrityBaselineTest extends TestCase
             array_merge($valid, ['truncated' => 'false']),
             array_merge($valid, ['truncated' => null]),
             $truncatedUnderTotal,
+            // A schema-2 manifest predates null hashes: a null hash there is
+            // tampering, not a rolling state.
+            array_merge($schema2, ['files' => ['plugins/a.php' => null]]),
         ];
 
         foreach ($malformed as $stored) {
@@ -476,8 +638,8 @@ final class FileIntegrityBaselineTest extends TestCase
             self::assertSame(0, $store->deletes);
         }
 
-        // A truncated payload whose stored file list fell below the cap (tampered)
-        // must also be rejected.
+        // A footprint-bounded payload whose stored path list fell below the cap
+        // (tampered) must also be rejected.
         $shrunken = $truncatedAtBound;
         array_shift($shrunken['files']);
         [$reader, $store] = $this->baseline();
@@ -531,15 +693,15 @@ final class FileIntegrityBaselineTest extends TestCase
     private function truncatedPayload(): array
     {
         $payload = [
-            'schema' => 2,
+            'schema' => 3,
             'captured_at' => 1_000,
             'files' => [],
-            'total' => 2001,
+            'total' => FileIntegrityBaseline::MAX_PATHS + 1,
             'truncated' => true,
             'cursor' => null,
         ];
-        foreach (range(1, 2000) as $index) {
-            $payload['files'][sprintf('plugins/r-%04d.php', $index)] = str_repeat('a', 64);
+        foreach (range(1, FileIntegrityBaseline::MAX_PATHS) as $index) {
+            $payload['files'][sprintf('plugins/r-%06d.php', $index)] = str_repeat('a', 64);
         }
         ksort($payload['files'], SORT_STRING);
 

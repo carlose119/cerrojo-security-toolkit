@@ -59,7 +59,7 @@ final class FileIntegrityAdmin
         ?callable $cronClear = null,
         ?callable $formatDate = null,
     ) {
-        $this->scan = Closure::fromCallable($scan ?? static fn (): array => (new FileIntegrityScanner())->scan());
+        $this->scan = Closure::fromCallable($scan ?? static fn (?string $cursor = null): array => (new FileIntegrityScanner())->scan($cursor));
         $this->currentUserCan = Closure::fromCallable($currentUserCan ?? static fn (string $capability): bool => \current_user_can($capability));
         $this->verifyNonce = Closure::fromCallable($verifyNonce ?? static fn (string $nonce, string $action): bool => (bool) \wp_verify_nonce($nonce, $action));
         $this->nonceField = Closure::fromCallable($nonceField ?? static fn (string $action): string => (string) \wp_nonce_field($action, '_wpnonce', true, false));
@@ -193,20 +193,26 @@ final class FileIntegrityAdmin
 
     private function handleBaseline(): void
     {
+        // The rotation cursor belongs to the stored manifest: the fresh capture
+        // continues where the last cycle stopped instead of re-hashing from the
+        // start. Without a usable baseline the pass starts from the first key.
+        $previous = $this->baseline->read();
         try {
-            $scan = ($this->scan)();
+            $scan = ($this->scan)(is_array($previous) && is_string($previous['cursor'] ?? null) ? $previous['cursor'] : null);
         } catch (\Throwable) {
             $scan = null;
         }
 
         $files = is_array($scan) ? ($scan['files'] ?? null) : null;
-        if (! is_array($files)) {
+        $paths = (is_array($scan) && is_array($scan['paths'] ?? null)) ? $scan['paths'] : null;
+        if (! is_array($files) || $paths === null) {
             $this->redirect('scan_unavailable');
 
             return;
         }
 
-        $this->redirect($this->baseline->capture($files) ? 'baseline_captured' : 'baseline_failed');
+        $cursor = is_array($scan) && is_string($scan['next_cursor'] ?? null) ? $scan['next_cursor'] : null;
+        $this->redirect($this->baseline->capture($files, $paths, $cursor) ? 'baseline_captured' : 'baseline_failed');
     }
 
     /** @return array<string, string> */
@@ -268,6 +274,7 @@ final class FileIntegrityAdmin
         echo '</ul>';
         $this->renderCycleStatus($result);
         $this->renderCoverage($result);
+        $this->renderPassProgress($result);
         $this->renderFindings($result);
     }
 
@@ -292,6 +299,44 @@ final class FileIntegrityAdmin
         }
 
         echo '<p>' . \esc_html($message) . '</p>';
+    }
+
+    /**
+     * State the rotation schedule of the last cycle: how much of the watched set
+     * was hashed, how much is left before a full pass, and the honest limit that
+     * a content change is detected at that file's next turn. A cycle with no
+     * comparison has no schedule to state.
+     *
+     * @param array<string, mixed> $result
+     */
+    private function renderPassProgress(array $result): void
+    {
+        $status = is_string($result['status'] ?? null) ? $result['status'] : '';
+        if ($status === 'scan_unavailable' || $status === 'baseline_unavailable' || $status === 'baseline_created') {
+            return;
+        }
+
+        $hashed = is_int($result['hashed'] ?? null) ? $result['hashed'] : 0;
+        $remaining = is_int($result['remaining'] ?? null) ? $result['remaining'] : 0;
+        $complete = ($result['pass_complete'] ?? null) === true;
+        $unreadable = is_int($result['unreadable'] ?? null) ? $result['unreadable'] : 0;
+        $skipped = is_int($result['skipped'] ?? null) ? $result['skipped'] : 0;
+
+        // A result stored before rotation carries no schedule at all; inventing
+        // one from zeroed progress would claim a pass that was never measured.
+        if ($hashed === 0 && $remaining === 0 && ! $complete) {
+            return;
+        }
+
+        $watched = $hashed + $remaining + $unreadable + $skipped;
+
+        if ($complete) {
+            echo '<p>' . \esc_html(\sprintf(\__('Hashing pass: this cycle hashed %1$d of %2$d watched files and completed a full pass.', 'cerrojo-security-toolkit'), $hashed, $watched)) . '</p>';
+
+            return;
+        }
+
+        echo '<p>' . \esc_html(\sprintf(\__('Hashing pass: this cycle hashed %1$d of %2$d watched files; %3$d remain before every watched file has had a turn. Paths that appear or vanish are reported on the cycle they change, but a watched file\'s content change is detected at that file\'s next turn, not immediately.', 'cerrojo-security-toolkit'), $hashed, $watched, $remaining)) . '</p>';
     }
 
     /**
@@ -363,11 +408,12 @@ final class FileIntegrityAdmin
             }
 
             $known = $this->policy->isKnown($finding['path'], $finding['hash']);
-            echo '<li><code>' . \esc_html($finding['path']) . '</code> — ' . \esc_html($this->changeLabel($finding['change'])) . ' — ' . \esc_html(
-                $known
+            $state = $finding['hash'] === ''
+                ? \__('its content has not been hashed yet; it is compared at that file\'s next turn.', 'cerrojo-security-toolkit')
+                : ($known
                     ? \__('already known (reported earlier or acknowledged); it will not alert again until the acknowledgements are cleared.', 'cerrojo-security-toolkit')
-                    : \__('not known yet; it alerts again on the next cycle until it is acknowledged.', 'cerrojo-security-toolkit'),
-            ) . '</li>';
+                    : \__('not known yet; it alerts again on the next cycle until it is acknowledged.', 'cerrojo-security-toolkit'));
+            echo '<li><code>' . \esc_html($finding['path']) . '</code> — ' . \esc_html($this->changeLabel($finding['change'])) . ' — ' . \esc_html($state) . '</li>';
         }
         echo '</ul>';
         if ($total > count($findings)) {

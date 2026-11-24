@@ -15,15 +15,15 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Domain: cerrojo-security-toolkit\n"
 
-#: src/Admin/FileIntegrityAdmin.php:246
+#: src/Admin/FileIntegrityAdmin.php:252
 msgid "%d change(s) are currently marked known."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:336
+#: src/Admin/FileIntegrityAdmin.php:381
 msgid "%d watched file(s) could not be read, so those files are unverifiable, not a match with the baseline."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:340
+#: src/Admin/FileIntegrityAdmin.php:385
 msgid "%d watched file(s) were skipped for exceeding the size bound."
 msgstr ""
 
@@ -35,7 +35,7 @@ msgstr ""
 msgid "A compatibility acknowledgement is required before adding route rules."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:376
+#: src/Admin/FileIntegrityAdmin.php:422
 msgid "A finding states what differs from the stored baseline; it is not a claim that the file is safe or that the site was compromised. An absent or acknowledged finding does not assert that everything is as it should be."
 msgstr ""
 
@@ -47,11 +47,11 @@ msgstr ""
 msgid "A new REST surface baseline was captured."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:445
+#: src/Admin/FileIntegrityAdmin.php:491
 msgid "A new baseline was captured from a fresh scan."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:444
+#: src/Admin/FileIntegrityAdmin.php:490
 msgid "A new check cycle ran and its outcome is recorded below."
 msgstr ""
 
@@ -67,7 +67,7 @@ msgstr ""
 msgid "A structural diff reports registration movement only; it does not describe authorization quality."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:418
+#: src/Admin/FileIntegrityAdmin.php:464
 msgid "Acknowledge reported changes"
 msgstr ""
 
@@ -75,11 +75,11 @@ msgstr ""
 msgid "Acknowledge the temporary legitimate-user and shared-proxy lockout risk before enabling Login Protection."
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:146 src/Admin/CriticalSettingsAlertAdmin.php:153 src/Admin/FileIntegrityAdmin.php:452 src/Admin/PluginActivityAlertAdmin.php:144
+#: src/Admin/AdministratorAccountAlertAdmin.php:146 src/Admin/CriticalSettingsAlertAdmin.php:153 src/Admin/FileIntegrityAdmin.php:498 src/Admin/PluginActivityAlertAdmin.php:144
 msgid "Add at least one valid recipient before enabling alerts."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:263 src/Admin/FileIntegrityAdmin.php:382 src/Admin/RestExposurePanel.php:223
+#: src/Admin/FileIntegrityAdmin.php:269 src/Admin/FileIntegrityAdmin.php:428 src/Admin/RestExposurePanel.php:223
 msgid "Added"
 msgstr ""
 
@@ -107,15 +107,15 @@ msgstr ""
 msgid "Aggregate metrics"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:266
+#: src/Admin/FileIntegrityAdmin.php:272
 msgid "Alerted about"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:284
+#: src/Admin/FileIntegrityAdmin.php:291
 msgid "Alerting is enabled, but no valid recipient is configured, so the cycle could not send any alert."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:450
+#: src/Admin/FileIntegrityAdmin.php:496
 msgid "All acknowledgements were cleared, so every current change alerts again."
 msgstr ""
 
@@ -163,7 +163,7 @@ msgstr ""
 msgid "Capture REST surface baseline"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:412
+#: src/Admin/FileIntegrityAdmin.php:458
 msgid "Capture a new baseline"
 msgstr ""
 
@@ -179,7 +179,7 @@ msgstr ""
 msgid "Capturing replaces any stored baseline with the current surface. Clearing removes the stored baseline. Only the baseline option is written or deleted; no route, callback, or permission value is stored or executed."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:414
+#: src/Admin/FileIntegrityAdmin.php:460
 msgid "Capturing replaces the stored baseline with a fresh scan, so finding reports against the replaced baseline stop. Capture deliberately, for example after you reviewed and accepted the current files."
 msgstr ""
 
@@ -227,7 +227,7 @@ msgstr ""
 msgid "Cerrojo stores one WordPress option. Disabling it stops Cerrojo from defining the constant on the next request. No configuration file is edited."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:264 src/Admin/FileIntegrityAdmin.php:384
+#: src/Admin/FileIntegrityAdmin.php:270 src/Admin/FileIntegrityAdmin.php:430
 msgid "Changed"
 msgstr ""
 
@@ -247,11 +247,11 @@ msgstr ""
 msgid "Clear all saved REST route rules without loading the catalog. Deactivation also stops enforcement but preserves the option."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:426
+#: src/Admin/FileIntegrityAdmin.php:472
 msgid "Clears every acknowledgement, so every current change alerts again on the next cycle."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:391
+#: src/Admin/FileIntegrityAdmin.php:437
 msgid "Commands"
 msgstr ""
 
@@ -287,15 +287,15 @@ msgstr ""
 msgid "Coverage is limited to the"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:343
+#: src/Admin/FileIntegrityAdmin.php:388
 msgid "Coverage was incomplete:"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:324
+#: src/Admin/FileIntegrityAdmin.php:369
 msgid "Coverage: complete for the watched surfaces in this capture."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:314
+#: src/Admin/FileIntegrityAdmin.php:359
 msgid "Coverage: this cycle stored the first baseline; no comparison was made yet."
 msgstr ""
 
@@ -303,7 +303,7 @@ msgstr ""
 msgid "Coverage: this group is emitted only on eligible wp_headers front-end responses; verify the final response at every serving edge."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:308
+#: src/Admin/FileIntegrityAdmin.php:353
 msgid "Coverage: unknown for this cycle — the capture could not run, so nothing was compared."
 msgstr ""
 
@@ -379,7 +379,7 @@ msgstr ""
 msgid "Disable selected"
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:238 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityHeadersAdmin.php:241 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:87
+#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:244 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityHeadersAdmin.php:241 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:87
 msgid "Disabled"
 msgstr ""
 
@@ -451,7 +451,7 @@ msgstr ""
 msgid "Enable administrator account alerts"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:397
+#: src/Admin/FileIntegrityAdmin.php:443
 msgid "Enable file change email alerts"
 msgstr ""
 
@@ -467,7 +467,7 @@ msgstr ""
 msgid "Enable selected"
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:238 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityHeadersAdmin.php:241 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:87
+#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:244 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityHeadersAdmin.php:241 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:87
 msgid "Enabled"
 msgstr ""
 
@@ -483,7 +483,7 @@ msgstr ""
 msgid "Enter email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:400
+#: src/Admin/FileIntegrityAdmin.php:446
 msgid "Enter email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient. Disabling preserves the configured recipient list and clears the scheduled daily check."
 msgstr ""
 
@@ -491,11 +491,11 @@ msgstr ""
 msgid "Enter up to 50 recipients as email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:448
+#: src/Admin/FileIntegrityAdmin.php:494
 msgid "Every listed finding from the last cycle was marked known; the corresponding alert stops until the acknowledgements are cleared."
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:145 src/Admin/CriticalSettingsAlertAdmin.php:152 src/Admin/FileIntegrityAdmin.php:451 src/Admin/PluginActivityAlertAdmin.php:143
+#: src/Admin/AdministratorAccountAlertAdmin.php:145 src/Admin/CriticalSettingsAlertAdmin.php:152 src/Admin/FileIntegrityAdmin.php:497 src/Admin/PluginActivityAlertAdmin.php:143
 msgid "Every recipient must be a valid email address. No change was made."
 msgstr ""
 
@@ -511,19 +511,19 @@ msgstr ""
 msgid "File change tripwire"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:442
+#: src/Admin/FileIntegrityAdmin.php:488
 msgid "File change tripwire alerting was disabled. Configured recipients were preserved and the scheduled daily check was cleared."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:441
+#: src/Admin/FileIntegrityAdmin.php:487
 msgid "File change tripwire alerting was enabled. A daily check is scheduled while alerting stays enabled."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:396
+#: src/Admin/FileIntegrityAdmin.php:442
 msgid "File change tripwire settings"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:443
+#: src/Admin/FileIntegrityAdmin.php:489
 msgid "File change tripwire settings were already in the requested state."
 msgstr ""
 
@@ -531,7 +531,7 @@ msgstr ""
 msgid "File integrity"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:349
+#: src/Admin/FileIntegrityAdmin.php:394
 msgid "Findings from this cycle"
 msgstr ""
 
@@ -539,7 +539,7 @@ msgstr ""
 msgid "Forces future browser requests to HTTPS for 24 hours. A broken HTTPS deployment can make the site unreachable to returning browsers."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:424
+#: src/Admin/FileIntegrityAdmin.php:470
 msgid "Forget acknowledgements"
 msgstr ""
 
@@ -557,6 +557,14 @@ msgstr ""
 
 #: src/Admin/SecurityDashboard.php:171
 msgid "Hardening"
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:334
+msgid "Hashing pass: this cycle hashed %1$d of %2$d watched files and completed a full pass."
+msgstr ""
+
+#: src/Admin/FileIntegrityAdmin.php:339
+msgid "Hashing pass: this cycle hashed %1$d of %2$d watched files; %3$d remain before every watched file has had a turn. Paths that appear or vanish are reported on the cycle they change, but a watched file's content change is detected at that file's next turn, not immediately."
 msgstr ""
 
 #: src/Admin/SecurityHeadersAdmin.php:172
@@ -587,7 +595,7 @@ msgstr ""
 msgid "Invalidate all current Login Protection buckets while preserving the enabled state and aggregate metrics."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:252
+#: src/Admin/FileIntegrityAdmin.php:258
 msgid "Last check cycle"
 msgstr ""
 
@@ -623,7 +631,7 @@ msgstr ""
 msgid "Manage reversible WordPress hardening controls."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:420
+#: src/Admin/FileIntegrityAdmin.php:466
 msgid "Marks every finding listed above as known, so it stops alerting until the acknowledgements are cleared. Acknowledging states that you reviewed a change and consider it expected; it is not a statement that the file is safe."
 msgstr ""
 
@@ -699,11 +707,11 @@ msgstr ""
 msgid "No REST surface baseline is stored. Capturing one records the current registered route keys so later visits can show what appeared, disappeared, or changed permission class."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:285
+#: src/Admin/FileIntegrityAdmin.php:292
 msgid "No baseline existed, so this cycle created one from the current scan. No files were compared and nothing was concluded."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:255
+#: src/Admin/FileIntegrityAdmin.php:261
 msgid "No check cycle has run yet, so there is no comparison to show. That does not mean the site is clean."
 msgstr ""
 
@@ -719,7 +727,7 @@ msgstr ""
 msgid "No global"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:240
+#: src/Admin/FileIntegrityAdmin.php:246
 msgid "No recipient is configured. Enabling requires at least one valid recipient; a cycle without a recipient cannot send any alert."
 msgstr ""
 
@@ -819,11 +827,11 @@ msgstr ""
 msgid "REST surface baseline"
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:106 src/Admin/CriticalSettingsAlertAdmin.php:113 src/Admin/FileIntegrityAdmin.php:398 src/Admin/PluginActivityAlertAdmin.php:103
+#: src/Admin/AdministratorAccountAlertAdmin.php:106 src/Admin/CriticalSettingsAlertAdmin.php:113 src/Admin/FileIntegrityAdmin.php:444 src/Admin/PluginActivityAlertAdmin.php:103
 msgid "Recipients"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:245
+#: src/Admin/FileIntegrityAdmin.php:251
 msgid "Recipients:"
 msgstr ""
 
@@ -835,7 +843,7 @@ msgstr ""
 msgid "Registered REST route handlers:"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:265 src/Admin/FileIntegrityAdmin.php:383 src/Admin/RestExposurePanel.php:224
+#: src/Admin/FileIntegrityAdmin.php:271 src/Admin/FileIntegrityAdmin.php:429 src/Admin/RestExposurePanel.php:224
 msgid "Removed"
 msgstr ""
 
@@ -871,11 +879,11 @@ msgstr ""
 msgid "Route templates"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:406
+#: src/Admin/FileIntegrityAdmin.php:452
 msgid "Run a check now"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:408
+#: src/Admin/FileIntegrityAdmin.php:454
 msgid "Runs one bounded capture and compares it with the stored baseline. If no baseline exists, the cycle creates one and alerts nobody."
 msgstr ""
 
@@ -899,7 +907,7 @@ msgstr ""
 msgid "Save administrator account alert settings"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:401
+#: src/Admin/FileIntegrityAdmin.php:447
 msgid "Save file change tripwire settings"
 msgstr ""
 
@@ -935,7 +943,7 @@ msgstr ""
 msgid "Showing"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:374
+#: src/Admin/FileIntegrityAdmin.php:420
 msgid "Showing %1$d of %2$d findings; the remainder is omitted for length."
 msgstr ""
 
@@ -955,7 +963,7 @@ msgstr ""
 msgid "Standard wp-login and flows through wp_authenticate(), including ordinary XML-RPC authentication, are covered. REST Application Password authentication is not covered."
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:238 src/Admin/FileIntegrityAdmin.php:261 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityDashboard.php:191 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:91
+#: src/Admin/AdministratorAccountAlertAdmin.php:93 src/Admin/CriticalSettingsAlertAdmin.php:99 src/Admin/FileIntegrityAdmin.php:244 src/Admin/FileIntegrityAdmin.php:267 src/Admin/LoginProtectionAdmin.php:100 src/Admin/PluginActivityAlertAdmin.php:93 src/Admin/SecurityDashboard.php:191 src/Admin/SecurityHeadersAdmin.php:249 src/Admin/SecurityHeadersAdmin.php:258 src/Admin/XmlRpcPingbackAdmin.php:91
 msgid "Status:"
 msgstr ""
 
@@ -963,7 +971,7 @@ msgstr ""
 msgid "Stored route count:"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:267
+#: src/Admin/FileIntegrityAdmin.php:273
 msgid "Suppressed"
 msgstr ""
 
@@ -1007,7 +1015,7 @@ msgstr ""
 msgid "The active REST catalog is unavailable. Normal saving is disabled; Clear all remains available for recovery."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:446
+#: src/Admin/FileIntegrityAdmin.php:492
 msgid "The baseline could not be stored. No baseline was changed."
 msgstr ""
 
@@ -1023,15 +1031,15 @@ msgstr ""
 msgid "The current REST registry was unavailable, so the surface delta could not be computed."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:286
+#: src/Admin/FileIntegrityAdmin.php:293
 msgid "The cycle could not store a baseline, so no comparison happened."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:283
+#: src/Admin/FileIntegrityAdmin.php:290
 msgid "The cycle found changes and tried to send one alert email, but the mail transport failed. These changes remain unacknowledged and are attempted again on the next cycle; no alert went out."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:282
+#: src/Admin/FileIntegrityAdmin.php:289
 msgid "The cycle ran and compared the watched files with the stored baseline. There are no changes that still demand an alert in this record; that alone is not proof that the site remains clean."
 msgstr ""
 
@@ -1051,11 +1059,11 @@ msgstr ""
 msgid "The live surface exceeds the 500 route-key bound, so the delta compares only the first 500 registered route keys in sorted order."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:281
+#: src/Admin/FileIntegrityAdmin.php:288
 msgid "The mail transport accepted one alert for the changes reported here. Acceptance is not proof that the message reached its destination."
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:148 src/Admin/CriticalSettingsAlertAdmin.php:155 src/Admin/FileEditorAdmin.php:137 src/Admin/FileIntegrityAdmin.php:455 src/Admin/LoginProtectionAdmin.php:185 src/Admin/PluginActivityAlertAdmin.php:146 src/Admin/RestExposurePanel.php:321 src/Admin/RestRouteControlsAdmin.php:266 src/Admin/SecurityHeadersAdmin.php:443 src/Admin/XmlRpcPingbackAdmin.php:121
+#: src/Admin/AdministratorAccountAlertAdmin.php:148 src/Admin/CriticalSettingsAlertAdmin.php:155 src/Admin/FileEditorAdmin.php:137 src/Admin/FileIntegrityAdmin.php:501 src/Admin/LoginProtectionAdmin.php:185 src/Admin/PluginActivityAlertAdmin.php:146 src/Admin/RestExposurePanel.php:321 src/Admin/RestRouteControlsAdmin.php:266 src/Admin/SecurityHeadersAdmin.php:443 src/Admin/XmlRpcPingbackAdmin.php:121
 msgid "The request could not be verified. No change was made."
 msgstr ""
 
@@ -1063,7 +1071,7 @@ msgstr ""
 msgid "The request must use POST. No change was made."
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:147 src/Admin/CriticalSettingsAlertAdmin.php:154 src/Admin/FileIntegrityAdmin.php:454 src/Admin/PluginActivityAlertAdmin.php:145
+#: src/Admin/AdministratorAccountAlertAdmin.php:147 src/Admin/CriticalSettingsAlertAdmin.php:154 src/Admin/FileIntegrityAdmin.php:500 src/Admin/PluginActivityAlertAdmin.php:145
 msgid "The request was malformed or did not use POST. No change was made."
 msgstr ""
 
@@ -1095,7 +1103,7 @@ msgstr ""
 msgid "The requested command is not supported. No change was made."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:456
+#: src/Admin/FileIntegrityAdmin.php:502
 msgid "The requested file integrity command is not supported. No change was made."
 msgstr ""
 
@@ -1111,11 +1119,11 @@ msgstr ""
 msgid "The requested security-header target is not supported. No change was made."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:287
+#: src/Admin/FileIntegrityAdmin.php:294
 msgid "The scan could not run, so no comparison happened."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:447
+#: src/Admin/FileIntegrityAdmin.php:493
 msgid "The scan did not return a usable result, so no baseline was written. No change was made."
 msgstr ""
 
@@ -1131,7 +1139,7 @@ msgstr ""
 msgid "The selected route rules are invalid. No change was made."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:449
+#: src/Admin/FileIntegrityAdmin.php:495
 msgid "There are no valid listed findings to acknowledge. No change was made."
 msgstr ""
 
@@ -1143,7 +1151,7 @@ msgstr ""
 msgid "These saved templates are no longer in the active registry. Keep them checked to retain them or uncheck them to remove them."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:354
+#: src/Admin/FileIntegrityAdmin.php:399
 msgid "This cycle reported no individual findings against the baseline."
 msgstr ""
 
@@ -1259,7 +1267,7 @@ msgstr ""
 msgid "WordPress could not save the administrator account alert settings. The prior state may remain."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:453
+#: src/Admin/FileIntegrityAdmin.php:499
 msgid "WordPress could not save the configuration. The prior state may remain."
 msgstr ""
 
@@ -1295,11 +1303,11 @@ msgstr ""
 msgid "You are not allowed to manage Cerrojo Security Toolkit."
 msgstr ""
 
-#: src/Admin/AdministratorAccountAlertAdmin.php:150 src/Admin/CriticalSettingsAlertAdmin.php:157 src/Admin/FileEditorAdmin.php:139 src/Admin/FileIntegrityAdmin.php:457 src/Admin/LoginProtectionAdmin.php:187 src/Admin/PluginActivityAlertAdmin.php:148 src/Admin/RestRouteControlsAdmin.php:268 src/Admin/SecurityHeadersAdmin.php:450 src/Admin/XmlRpcPingbackAdmin.php:123
+#: src/Admin/AdministratorAccountAlertAdmin.php:150 src/Admin/CriticalSettingsAlertAdmin.php:157 src/Admin/FileEditorAdmin.php:139 src/Admin/FileIntegrityAdmin.php:503 src/Admin/LoginProtectionAdmin.php:187 src/Admin/PluginActivityAlertAdmin.php:148 src/Admin/RestRouteControlsAdmin.php:268 src/Admin/SecurityHeadersAdmin.php:450 src/Admin/XmlRpcPingbackAdmin.php:123
 msgid "You are not allowed to perform this action. No change was made."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:368
+#: src/Admin/FileIntegrityAdmin.php:414
 msgid "already known (reported earlier or acknowledged); it will not alert again until the acknowledgements are cleared."
 msgstr ""
 
@@ -1319,11 +1327,15 @@ msgstr ""
 msgid "isolation"
 msgstr ""
 
+#: src/Admin/FileIntegrityAdmin.php:412
+msgid "its content has not been hashed yet; it is compared at that file's next turn."
+msgstr ""
+
 #: src/Admin/LoginProtectionAdmin.php:173
 msgid "last:"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:369
+#: src/Admin/FileIntegrityAdmin.php:415
 msgid "not known yet; it alerts again on the next cycle until it is acknowledged."
 msgstr ""
 
@@ -1351,11 +1363,11 @@ msgstr ""
 msgid "policy without a configured reporting endpoint."
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:261
+#: src/Admin/FileIntegrityAdmin.php:267
 msgid "recorded"
 msgstr ""
 
-#: src/Admin/FileIntegrityAdmin.php:331
+#: src/Admin/FileIntegrityAdmin.php:376
 msgid "the capture was truncated at its file bound, so some watched files were not compared"
 msgstr ""
 

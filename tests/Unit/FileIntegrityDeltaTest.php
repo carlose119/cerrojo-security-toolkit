@@ -155,4 +155,75 @@ final class FileIntegrityDeltaTest extends TestCase
 
         self::assertSame(['added' => 1, 'removed' => 1, 'changed' => 1, 'total' => 3], FileIntegrityDelta::counts($delta));
     }
+
+    public function testCompareWithoutCurrentPathsKeepsTheCurrentMapAuthoritative(): void
+    {
+        $previous = ['plugins/a.php' => str_repeat('a', 64), 'plugins/gone.php' => str_repeat('0', 64)];
+        $current = ['plugins/a.php' => str_repeat('a', 64)];
+
+        // No path set: the two hash maps are compared as-is, so the baseline
+        // caller who passes complete maps on both sides keeps today's behaviour.
+        self::assertSame(['added' => [], 'removed' => ['plugins/gone.php' => str_repeat('0', 64)], 'changed' => []], FileIntegrityDelta::compare($previous, $current));
+    }
+
+    public function testCompareWithCurrentPathsNeverReportsAnUnhashedPathAsMovement(): void
+    {
+        $previous = [
+            'plugins/watched.php' => null,
+            'plugins/settled.php' => str_repeat('b', 64),
+        ];
+        // Nothing was hashed this cycle; both paths stay watched.
+        $current = [];
+        $currentPaths = ['plugins/settled.php', 'plugins/watched.php'];
+
+        self::assertSame(['added' => [], 'removed' => [], 'changed' => []], FileIntegrityDelta::compare($previous, $current, $currentPaths));
+    }
+
+    public function testCompareWithCurrentPathsReportsGenuinelyAddedRemovedAndChangedPaths(): void
+    {
+        $previous = [
+            'plugins/removed.php' => str_repeat('0', 64),
+            'plugins/changed.php' => str_repeat('a', 64),
+            'plugins/kept.php' => str_repeat('b', 64),
+        ];
+        // Only the changed file was hashed this cycle; the added path is on the
+        // enumeration but its content has not been hashed yet.
+        $current = ['plugins/changed.php' => str_repeat('c', 64)];
+        $currentPaths = ['plugins/added.php', 'plugins/changed.php', 'plugins/kept.php'];
+
+        $delta = FileIntegrityDelta::compare($previous, $current, $currentPaths);
+
+        self::assertSame(['plugins/added.php' => ''], $delta['added'], 'An added path is reported immediately, with an empty hash until its turn.');
+        self::assertSame(['plugins/removed.php' => str_repeat('0', 64)], $delta['removed']);
+        self::assertSame([
+            'plugins/changed.php' => ['from' => str_repeat('a', 64), 'to' => str_repeat('c', 64)],
+        ], $delta['changed']);
+        self::assertSame(['added' => 1, 'removed' => 1, 'changed' => 1, 'total' => 3], FileIntegrityDelta::counts($delta));
+    }
+
+    public function testCompareWithCurrentPathsRequiresAStringPreviousHashForAChange(): void
+    {
+        $previous = ['plugins/first-turn.php' => null, 'plugins/kept.php' => str_repeat('b', 64)];
+        $current = ['plugins/first-turn.php' => str_repeat('f', 64), 'plugins/kept.php' => str_repeat('b', 64)];
+        $currentPaths = array_keys($current);
+
+        $delta = FileIntegrityDelta::compare($previous, $current, $currentPaths);
+
+        self::assertSame(['added' => [], 'removed' => [], 'changed' => []], $delta, 'A first-ever hash of a watched path is its baseline integration, not a change.');
+    }
+
+    public function testCompareWithCurrentPathsIsSortedAndPure(): void
+    {
+        $previous = [
+            'plugins/z-gone.php' => str_repeat('0', 64),
+            'plugins/a-gone.php' => str_repeat('1', 64),
+        ];
+        $currentPaths = ['plugins/added.php', 'plugins/kept.php'];
+
+        $first = FileIntegrityDelta::compare($previous, [], $currentPaths);
+        $second = FileIntegrityDelta::compare($previous, [], $currentPaths);
+
+        self::assertSame(['plugins/a-gone.php', 'plugins/z-gone.php'], array_keys($first['removed']), 'Removals must be sorted by path.');
+        self::assertSame($first, $second);
+    }
 }

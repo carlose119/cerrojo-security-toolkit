@@ -559,6 +559,14 @@ msgstr "Políticas de cabeceras de seguridad HTTP"
 msgid "Hardening"
 msgstr "Endurecimiento"
 
+#: src/Admin/FileIntegrityAdmin.php:334
+msgid "Hashing pass: this cycle hashed %1$d of %2$d watched files and completed a full pass."
+msgstr "Recorrido de hashing: este ciclo calculó el hash de %1$d de %2$d archivos vigilados y completó un recorrido completo."
+
+#: src/Admin/FileIntegrityAdmin.php:339
+msgid "Hashing pass: this cycle hashed %1$d of %2$d watched files; %3$d remain before every watched file has had a turn. Paths that appear or vanish are reported on the cycle they change, but a watched file's content change is detected at that file's next turn, not immediately."
+msgstr "Recorrido de hashing: este ciclo calculó el hash de %1$d de %2$d archivos vigilados; quedan %3$d antes de que todos los archivos vigilados hayan tenido su turno. Las rutas que aparecen o desaparecen se informan en el ciclo en que cambian, pero un cambio de contenido en un archivo vigilado se detecta en el próximo turno de ese archivo, no de inmediato."
+
 #: src/Admin/SecurityHeadersAdmin.php:172
 msgid "High-impact policies can break embedding, browser features, resources, transport, or"
 msgstr "Las políticas de alto impacto pueden romper la incrustación, las funciones del navegador, los recursos, el transporte, o"
@@ -1319,6 +1327,10 @@ msgstr ". Valida todos los flujos de incrustación previstos."
 msgid "isolation"
 msgstr "aislamiento"
 
+#: src/Admin/FileIntegrityAdmin.php:412
+msgid "its content has not been hashed yet; it is compared at that file's next turn."
+msgstr "su contenido todavía no tiene hash; se compara en el próximo turno de ese archivo."
+
 #: src/Admin/LoginProtectionAdmin.php:173
 msgid "last:"
 msgstr "último:"
@@ -1370,3 +1382,4 @@ msgstr "antes"
 #: src/Admin/SecurityHeadersAdmin.php:172
 msgid "workflows."
 msgstr "flujos de trabajo."
+

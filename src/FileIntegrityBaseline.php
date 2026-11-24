@@ -9,26 +9,30 @@ use Throwable;
 
 /**
  * Persisted baseline manifest of watched code files: which relative paths
- * exist under the watched surfaces and what sha256 each one had when captured.
+ * exist under the watched surfaces and what sha256 each one has, so far.
  *
- * This class only transforms the path => hash map it is given. It never reads
- * the filesystem, never resolves absolute paths, and never touches a watched
- * file: the stored payload carries hashes of already-computed content only.
+ * The manifest is a rolling record: `files` maps a watched path to its
+ * sha256, or to null when the path is watched but has not been hashed in a
+ * rotation cycle yet. It transforms only the enumeration and hash map it is
+ * given. It never reads the filesystem, never resolves absolute paths, and
+ * never touches a watched file: the stored payload carries hashes of already
+ * computed content only.
  */
 final class FileIntegrityBaseline
 {
     public const OPTION_NAME = 'bastion_security_wp_file_integrity_baseline';
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 3;
     /**
-     * Hard cap protecting the stored option from unbounded growth. Beyond
-     * MAX_FILES valid paths, capture keeps only the first MAX_FILES paths in
-     * sorted order, sets `truncated` to true, and keeps `total` as the real
-     * count of valid entries so a later delta can still report an honest
-     * total. Because a baseline is never complete when it was truncated, a
-     * truncated capture is reported as bounded coverage, never as a clean
-     * result (S11, S12).
+     * Footprint guard on the stored option, not a coverage bound: every watched
+     * path is kept — with its hash when known, with null until its hashing
+     * turn — so rotation never silently drops coverage. Ten thousand paths
+     * plus their hashes stay within a few hundred kilobytes even at the
+     * extreme; beyond the guard, capture keeps only the first MAX_PATHS paths
+     * in sorted order, sets `truncated` to true, and keeps `total` as the real
+     * count of valid entries. Because the manifest is no longer complete then,
+     * the panel reports bounded coverage instead of a clean result (S11, S12).
      */
-    public const MAX_FILES = 2000;
+    public const MAX_PATHS = 10000;
     /** Hard cap on one stored relative path, in bytes, not characters. */
     public const MAX_PATH_BYTES = 400;
 
@@ -50,23 +54,25 @@ final class FileIntegrityBaseline
     }
 
     /**
-     * Validate every entry of the raw path => sha256 map, apply the
-     * documented file bound, and persist the manifest. Returns false
-     * (writing nothing) when the clock or the capture timestamp is unusable,
-     * when any entry is malformed, or when the option write fails.
+     * Merge the complete enumeration of this cycle with its hash slice and
+     * persist the rolling manifest. For every enumerated path the stored hash
+     * is the one hashed this cycle, else the previous manifest's hash for
+     * that path, else null (a watched path whose turn has not come). Paths
+     * that left the enumeration are dropped; the manifest is enumeration-
+     * driven, so a stale hash entry only affects paths that still exist.
+     * Returns false (writing nothing) when the clock or the capture timestamp
+     * is unusable, when any entry is malformed, or when the option write
+     * fails.
      *
-     * The stored `truncated` flag describes this storage bound only. A manifest
-     * seeded from a capture that was itself truncated records the files it was
-     * given; the coverage of that cycle belongs to the cycle's own result, which
-     * is where the panel and the alert read it from.
+     * The stored `truncated` flag describes the footprint guard only. The
+     * rotation progress of the cycle (`cursor`, `total`) is honest: the cursor
+     * names the last path hashed this cycle, so the next cycle continues after
+     * it and wraps: no watched file stays outside coverage forever.
      *
-     * The cursor names the last path this capture hashed, so the next cycle
-     * continues after it and wraps: no watched file stays outside coverage
-     * forever.
-     *
-     * @param array<mixed> $files Raw map<string relativePath, string sha256>.
+     * @param array<mixed> $hashes Raw map<string relativePath, string|null sha256> hashed this cycle.
+     * @param list<mixed> $paths the complete, sorted enumerated candidate keys of this cycle.
      */
-    public function capture(array $files, ?int $now = null, ?string $cursor = null): bool
+    public function capture(array $hashes, array $paths, ?string $cursor = null, ?int $now = null): bool
     {
         try {
             $clockNow = ($this->clock)();
@@ -79,16 +85,34 @@ final class FileIntegrityBaseline
                 return false;
             }
 
-            foreach ($files as $path => $hash) {
-                if (! self::isSafePath($path) || ! self::isSha256($hash)) {
+            if ($cursor !== null && ! self::isSafePath($cursor)) {
+                return false;
+            }
+
+            foreach ($hashes as $path => $hash) {
+                if (! self::isSafePath($path) || ($hash !== null && ! self::isSha256($hash))) {
                     return false;
                 }
             }
 
-            $normalized = self::normalize($files);
-            if ($cursor !== null && ! self::isSafePath($cursor)) {
-                return false;
+            foreach ($paths as $path) {
+                if (! self::isSafePath($path)) {
+                    return false;
+                }
             }
+
+            $previousFiles = $this->read()['files'] ?? [];
+            $merged = [];
+            foreach ($paths as $path) {
+                if (array_key_exists($path, $hashes)) {
+                    $merged[$path] = $hashes[$path];
+                    continue;
+                }
+
+                $merged[$path] = self::isSha256($previousFiles[$path] ?? null) ? $previousFiles[$path] : null;
+            }
+
+            $normalized = self::normalize($merged);
 
             $payload = [
                 'schema' => self::SCHEMA_VERSION,
@@ -113,10 +137,12 @@ final class FileIntegrityBaseline
 
     /**
      * Return the stored manifest only when it validates completely; every
-     * malformed, tampered, or truncated shape yields null. A read never
-     * writes: no option value is updated or deleted by this method.
+     * malformed, tampered, or footprint-bounded shape yields null. A schema-1
+     * or schema-2 manifest is upgraded to the current schema instead of being
+     * discarded, so an upgrade keeps the rolling state. A read never writes:
+     * no option value is updated or deleted by this method.
      *
-     * @return array{schema: int, captured_at: int, files: array<string, string>, total: int, truncated: bool, cursor: ?string}|null
+     * @return array{schema: int, captured_at: int, files: array<string, string|null>, total: int, truncated: bool, cursor: ?string}|null
      */
     public function read(): ?array
     {
@@ -135,7 +161,7 @@ final class FileIntegrityBaseline
                 return null;
             }
 
-            if ($legacy ? $stored['schema'] !== 1 : $stored['schema'] !== self::SCHEMA_VERSION) {
+            if (! in_array($stored['schema'], $legacy ? [1] : [2, 3], true)) {
                 return null;
             }
 
@@ -149,7 +175,7 @@ final class FileIntegrityBaseline
             }
 
             $files = $stored['files'];
-            if (! is_array($files) || count($files) > self::MAX_FILES) {
+            if (! is_array($files) || count($files) > self::MAX_PATHS) {
                 return null;
             }
 
@@ -159,8 +185,18 @@ final class FileIntegrityBaseline
                 return null;
             }
 
+            // Only schema 3 records watched-but-not-yet-hashed paths; in any
+            // earlier schema a null or malformed hash is tampering.
             foreach ($files as $path => $hash) {
-                if (! self::isSafePath($path) || ! self::isSha256($hash)) {
+                if (! self::isSafePath($path)) {
+                    return null;
+                }
+
+                if ($stored['schema'] === 3) {
+                    if ($hash !== null && ! self::isSha256($hash)) {
+                        return null;
+                    }
+                } elseif (! self::isSha256($hash)) {
                     return null;
                 }
             }
@@ -172,7 +208,7 @@ final class FileIntegrityBaseline
             }
 
             if ($truncated) {
-                if (count($files) !== self::MAX_FILES || $total <= count($files)) {
+                if (count($files) !== self::MAX_PATHS || $total <= count($files)) {
                     return null;
                 }
             } elseif ($total !== count($files)) {
@@ -198,21 +234,26 @@ final class FileIntegrityBaseline
     }
 
     /**
-     * Pure normalizer for the raw path => sha256 map: keep only entries with
-     * a safe relative path and a lowercase hex sha256 value, sort by path,
-     * and apply the documented file bound. Malformed entries are silently
-     * dropped without throwing, never reported as present. Repeated string
-     * keys cannot coexist in a PHP array map, so a duplicate path collapses
-     * to a single entry by the language itself.
+     * Pure normalizer for the raw path => (hash or null) map: keep only
+     * entries with a safe relative path and a value that is either a
+     * lowercase hex sha256 or null (a watched path not hashed yet), sort by
+     * path, and apply the documented footprint guard. Malformed entries are
+     * silently dropped without throwing, never reported as present. Repeated
+     * string keys cannot coexist in a PHP array map, so a duplicate path
+     * collapses to a single entry by the language itself.
      *
      * @param array<mixed> $files
-     * @return array{files: array<string, string>, total: int, truncated: bool}
+     * @return array{files: array<string, string|null>, total: int, truncated: bool}
      */
     public static function normalize(array $files): array
     {
         $map = [];
         foreach ($files as $path => $hash) {
-            if (! self::isSafePath($path) || ! self::isSha256($hash)) {
+            if (! self::isSafePath($path)) {
+                continue;
+            }
+
+            if ($hash !== null && ! self::isSha256($hash)) {
                 continue;
             }
 
@@ -221,10 +262,10 @@ final class FileIntegrityBaseline
 
         ksort($map, SORT_STRING);
         $total = count($map);
-        $truncated = $total > self::MAX_FILES;
+        $truncated = $total > self::MAX_PATHS;
 
         return [
-            'files' => array_slice($map, 0, self::MAX_FILES, true),
+            'files' => array_slice($map, 0, self::MAX_PATHS, true),
             'total' => $total,
             'truncated' => $truncated,
         ];

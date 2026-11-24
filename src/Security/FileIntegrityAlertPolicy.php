@@ -21,8 +21,10 @@ use Throwable;
  * after being reported is a new finding. Acknowledging a finding marks it known,
  * which suppresses its alert until the acknowledgement is cleared; the known
  * list is bounded so a mass change cannot grow the stored option without limit.
- * The baseline never moves on its own: it moves only when check() seeds a first
- * baseline that does not exist yet, or when an administrator captures a new one.
+ * The manifest rolls: check() seeds it when it does not exist, and after every
+ * comparison cycle it refreshes the hash slice that was hashed and stores the
+ * rotation cursor. Nothing else moves it: an administrator's capture replaces
+ * it wholesale.
  */
 final class FileIntegrityAlertPolicy
 {
@@ -30,7 +32,7 @@ final class FileIntegrityAlertPolicy
     public const RESULT_OPTION_NAME = 'bastion_security_wp_file_integrity_alert_result';
 
     public const SCHEMA_VERSION = 1;
-    public const RESULT_SCHEMA_VERSION = 1;
+    public const RESULT_SCHEMA_VERSION = 2;
 
     public const MAX_RECIPIENTS = 50;
     public const MAX_KNOWN = 200;
@@ -41,13 +43,26 @@ final class FileIntegrityAlertPolicy
     /** Fingerprint separator between a path and its hash. */
     private const SEPARATOR = '|';
 
+    /** The documented stored-result key order, with the rotation progress keys. */
+    private const RESULT_KEYS = [
+        'schema', 'status', 'checked_at', 'baseline_files', 'added', 'removed', 'changed',
+        'notified', 'suppressed', 'hashed', 'remaining', 'pass_complete',
+        'truncated', 'unreadable', 'skipped', 'findings', 'findings_total',
+    ];
+
+    /** The pre-rotation stored-result key order (schema 1, no progress keys). */
+    private const LEGACY_RESULT_KEYS = [
+        'schema', 'status', 'checked_at', 'baseline_files', 'added', 'removed', 'changed',
+        'notified', 'suppressed', 'truncated', 'unreadable', 'skipped', 'findings', 'findings_total',
+    ];
+
     /** @var Closure(): mixed */
     private Closure $readOption;
 
     /** @var Closure(string, array<mixed>): bool */
     private Closure $writeOption;
 
-    /** @var Closure(): array{files: array<string, string>, total: int, truncated: bool, unreadable: list<string>, skipped: list<string>} */
+    /** @var Closure(?string): array{files: array<mixed>, ...} the scan seam: one rotation cycle, seeded by the stored cursor */
     private Closure $scan;
 
     /** @var Closure(list<string>, string, string): bool */
@@ -57,7 +72,7 @@ final class FileIntegrityAlertPolicy
     private Closure $clock;
 
     /**
-     * @param Closure(): array<string, mixed> $scan
+     * @param callable(?string $cursor = null): array<string, mixed> $scan one rotation cycle of the scanner; the cursor is the baseline's stored rotation position
      */
     public function __construct(
         private readonly FileIntegrityBaseline $baseline,
@@ -67,7 +82,7 @@ final class FileIntegrityAlertPolicy
         ?callable $mail = null,
         ?callable $clock = null,
     ) {
-        $this->scan = Closure::fromCallable($scan ?? static fn (): array => []);
+        $this->scan = Closure::fromCallable($scan ?? static fn (?string $cursor = null): array => []);
         $this->readOption = Closure::fromCallable($readOption ?? static fn (string $name): mixed => \get_option($name, null));
         $this->writeOption = Closure::fromCallable($writeOption ?? static fn (string $name, array $value): bool => (bool) \update_option($name, $value, false));
         $this->mail = Closure::fromCallable($mail ?? static fn (array $to, string $subject, string $message): bool => (bool) \wp_mail($to, $subject, $message));
@@ -196,8 +211,12 @@ final class FileIntegrityAlertPolicy
     }
 
     /**
-     * One independent cycle: seed the baseline when there is none, otherwise
-     * compare and report the changes that are not known yet.
+     * One independent cycle: read the stored baseline, scan the next rotation
+     * slice (starting after the baseline's stored cursor), then either seed the
+     * baseline when there is none, or compare the complete enumerated path set
+     * against it and report the changes that are not known yet. The merged
+     * manifest is stored after the delta is computed, with this cycle's
+     * rotation cursor.
      *
      * The returned array is exactly what gets stored, so the panel shows the
      * cycle's own outcome instead of a recomputation.
@@ -212,7 +231,13 @@ final class FileIntegrityAlertPolicy
         }
 
         try {
-            $scan = ($this->scan)();
+            $previous = $this->baseline->read();
+        } catch (Throwable) {
+            $previous = null;
+        }
+
+        try {
+            $scan = ($this->scan)(is_string($previous['cursor'] ?? null) ? $previous['cursor'] : null);
         } catch (Throwable) {
             $scan = null;
         }
@@ -232,31 +257,55 @@ final class FileIntegrityAlertPolicy
             return $this->record($partial);
         }
 
+        // The complete enumerated path set drives both the coverage of the merge
+        // and the path-level delta. A scan without it cannot be compared: the hash
+        // slice alone would report every known path outside the slice as removed.
+        $enumeratedPaths = is_array($scan['paths'] ?? null) ? self::listOf($scan['paths']) : null;
+        if ($enumeratedPaths === null) {
+            $refused = self::emptyResult('scan_unavailable', $at);
+            $refused['unreadable'] = count(self::listOf($scan['unreadable'] ?? []));
+            $refused['skipped'] = count(self::listOf($scan['skipped'] ?? []));
+
+            return $this->record($refused);
+        }
+
         $coverage = [
-            'truncated' => (bool) ($scan['truncated'] ?? false),
+            'truncated' => count($enumeratedPaths) > FileIntegrityBaseline::MAX_PATHS,
             'unreadable' => self::listOf($scan['unreadable'] ?? []),
             'skipped' => self::listOf($scan['skipped'] ?? []),
         ];
 
-        $previous = $this->baseline->read();
+        $progress = static function (array $result) use ($scan): array {
+            $result['hashed'] = self::intOf($scan['hashed'] ?? null);
+            $result['remaining'] = self::intOf($scan['remaining'] ?? null);
+            $result['pass_complete'] = ($scan['pass_complete'] ?? null) === true;
+
+            return $result;
+        };
+
         if ($previous === null) {
-            $seeded = $this->baseline->capture((array) $scan['files'], $at > 0 ? $at : null);
+            // Seeding stores the complete enumeration (null hashes until a path's
+            // turn), so the next cycles roll the manifest forward.
+            $seeded = $this->baseline->capture((array) $scan['files'], $enumeratedPaths, self::cursorOf($scan), $at > 0 ? $at : null);
+            $manifest = $seeded ? $this->baseline->read() : null;
+
             $result = self::emptyResult($seeded ? 'baseline_created' : 'baseline_unavailable', $at);
-            $result['baseline_files'] = $seeded ? count((array) $scan['files']) : 0;
-            $result['truncated'] = $coverage['truncated'];
+            $result['baseline_files'] = is_array($manifest) ? count($manifest['files']) : 0;
+            $result = $progress($result);
+            $result['truncated'] = is_array($manifest) ? (bool) $manifest['truncated'] : false;
             $result['unreadable'] = count($coverage['unreadable']);
             $result['skipped'] = count($coverage['skipped']);
 
             return $this->record($result);
         }
 
-        $delta = FileIntegrityDelta::compare($previous['files'], (array) $scan['files']);
-        $findings = self::flatten($delta);
+        $delta = FileIntegrityDelta::compare($previous['files'], (array) $scan['files'], $enumeratedPaths);
+        $movements = self::flatten($delta);
         $config = $this->readConfiguration();
 
         $fresh = [];
         $suppressed = 0;
-        foreach ($findings as $finding) {
+        foreach ($movements as $finding) {
             $fingerprint = self::fingerprint($finding['path'], $finding['hash']);
             if ($fingerprint !== null && in_array($fingerprint, $config['known'], true)) {
                 ++$suppressed;
@@ -299,6 +348,16 @@ final class FileIntegrityAlertPolicy
             ]);
         }
 
+        // The merged rolling manifest is stored after the delta is computed, so
+        // the comparison always sees the state the previous cycle stored. A cycle
+        // whose alert was attempted and failed does NOT roll: the stored hash
+        // would silence a change the next cycle has to report again. Every other
+        // cycle rolls, including one with alerting disabled, where there is no
+        // alert to retry and withholding the roll would freeze the rotation.
+        if ($status !== 'mail_failed' && $status !== 'no_recipients') {
+            $this->baseline->capture((array) $scan['files'], $enumeratedPaths, self::cursorOf($scan), $at > 0 ? $at : null);
+        }
+
         $result = [
             'schema' => self::RESULT_SCHEMA_VERSION,
             'status' => $status,
@@ -309,11 +368,14 @@ final class FileIntegrityAlertPolicy
             'changed' => count($delta['changed']),
             'notified' => $notified,
             'suppressed' => $suppressed,
+            'hashed' => self::intOf($scan['hashed'] ?? null),
+            'remaining' => self::intOf($scan['remaining'] ?? null),
+            'pass_complete' => ($scan['pass_complete'] ?? null) === true,
             'truncated' => $coverage['truncated'],
             'unreadable' => count($coverage['unreadable']),
             'skipped' => count($coverage['skipped']),
-            'findings' => array_slice($findings, 0, self::MAX_LISTED_FINDINGS),
-            'findings_total' => count($findings),
+            'findings' => array_slice($movements, 0, self::MAX_LISTED_FINDINGS),
+            'findings_total' => count($movements),
         ];
 
         return $this->record($result);
@@ -321,7 +383,9 @@ final class FileIntegrityAlertPolicy
 
     /**
      * The stored outcome of the last cycle, or null when the option is absent
-     * or does not validate completely.
+     * or does not validate completely. A result stored before rotation
+     * (schema 1, no progress keys) is upgraded with zeroed progress instead of
+     * being discarded, so an upgrade does not blank the panel section.
      *
      * @return array<string, mixed>|null
      */
@@ -337,22 +401,39 @@ final class FileIntegrityAlertPolicy
             return null;
         }
 
-        $keys = ['schema', 'status', 'checked_at', 'baseline_files', 'added', 'removed', 'changed', 'notified', 'suppressed', 'truncated', 'unreadable', 'skipped', 'findings', 'findings_total'];
-        if (array_keys($stored) !== $keys) {
+        $storedKeys = array_keys($stored);
+
+        if ($storedKeys === self::RESULT_KEYS) {
+            if ($stored['schema'] !== self::RESULT_SCHEMA_VERSION) {
+                return null;
+            }
+        } elseif ($storedKeys === self::LEGACY_RESULT_KEYS) {
+            if ($stored['schema'] !== 1) {
+                return null;
+            }
+
+            // A result stored before rotation carried no progress keys; the
+            // upgrade fills them at their documented positions.
+            $stored = array_merge(
+                array_slice($stored, 0, 9, true),
+                ['hashed' => 0, 'remaining' => 0, 'pass_complete' => false],
+                array_slice($stored, 9, null, true),
+            );
+        } else {
             return null;
         }
 
-        if ($stored['schema'] !== self::RESULT_SCHEMA_VERSION || ! self::isStatus($stored['status'])) {
+        if (! self::isStatus($stored['status'])) {
             return null;
         }
 
-        foreach (['checked_at', 'baseline_files', 'added', 'removed', 'changed', 'notified', 'suppressed', 'unreadable', 'skipped', 'findings_total'] as $key) {
+        foreach (['checked_at', 'baseline_files', 'added', 'removed', 'changed', 'notified', 'suppressed', 'hashed', 'remaining', 'unreadable', 'skipped', 'findings_total'] as $key) {
             if (! is_int($stored[$key]) || $stored[$key] < 0) {
                 return null;
             }
         }
 
-        if (! is_bool($stored['truncated']) || ! is_array($stored['findings']) || count($stored['findings']) > self::MAX_LISTED_FINDINGS) {
+        if (! is_bool($stored['truncated']) || ! is_bool($stored['pass_complete']) || ! is_array($stored['findings']) || count($stored['findings']) > self::MAX_LISTED_FINDINGS) {
             return null;
         }
 
@@ -366,7 +447,12 @@ final class FileIntegrityAlertPolicy
             }
 
             if (self::fingerprint($finding['path'], $finding['hash']) === null) {
-                return null;
+                // An added path whose hashing turn has not come has no hash yet.
+                // It is listed so the count and the list agree, and it cannot be
+                // acknowledged: there is no content to compare or to mark known.
+                if ($finding['change'] !== 'added' || $finding['hash'] !== '') {
+                    return null;
+                }
             }
         }
 
@@ -481,6 +567,9 @@ final class FileIntegrityAlertPolicy
             'changed' => 0,
             'notified' => 0,
             'suppressed' => 0,
+            'hashed' => 0,
+            'remaining' => 0,
+            'pass_complete' => false,
             'truncated' => false,
             'unreadable' => 0,
             'skipped' => 0,
@@ -669,6 +758,18 @@ final class FileIntegrityAlertPolicy
     private static function countOf(mixed $list): int
     {
         return is_array($list) ? count($list) : 0;
+    }
+
+    /** A rotation progress count from the scan; anything else reads as zero. */
+    private static function intOf(mixed $value): int
+    {
+        return is_int($value) && $value >= 0 ? $value : 0;
+    }
+
+    /** The rotation cursor the scan produced, or null when none was visited. */
+    private static function cursorOf(array $scan): ?string
+    {
+        return is_string($scan['next_cursor'] ?? null) ? $scan['next_cursor'] : null;
     }
 
     /** @return list<string> */
