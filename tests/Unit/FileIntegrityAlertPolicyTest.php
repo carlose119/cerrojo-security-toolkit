@@ -688,6 +688,28 @@ final class FileIntegrityAlertPolicyTest extends TestCase
         self::assertTrue($result['truncated'], 'The written manifest exceeds the footprint guard even though the enumeration does not.');
     }
 
+    public function testWatchingASurfaceForTheFirstTimeReportsItsExistingFilesAsAdded(): void
+    {
+        // A surface with no stored entries has no reference to compare against, so
+        // its existing files did just appear to this watcher: one burst of
+        // additions, which is the first-watch semantics the manifest inherits.
+        $mails = [];
+        $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['themes'];
+
+        $policy = $this->policy(
+            ['themes/one.php' => str_repeat('a', 64), 'themes/two.php' => str_repeat('b', 64)],
+            false,
+            $mails,
+            ['plugins/old.php' => str_repeat('c', 64)],
+            ['paths' => ['themes/one.php', 'themes/two.php'], 'total' => 2, 'hashed' => 2, 'remaining' => 0, 'pass_complete' => true],
+        );
+        $result = $policy->check();
+
+        self::assertSame(2, $result['added'], 'First watch of a surface reports the files it finds.');
+        self::assertSame(0, $result['removed'], 'The unwatched surface entry is frozen, never removed.');
+        self::assertSame(2, $result['findings_total']);
+    }
+
     private function policy(
         array $scanFiles,
         bool $enabled,

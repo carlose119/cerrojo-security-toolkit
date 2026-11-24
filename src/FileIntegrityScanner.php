@@ -84,7 +84,7 @@ final class FileIntegrityScanner
      *
      * @param string|null $cursor the last path hashed by the previous cycle, or null for a fresh pass from the first key
      * @param list<string>|null $surfaces the watched-surface selection; null keeps every surface so existing callers are unchanged, and a selection with no valid surface enumerates nothing
-     * @return array{files: array<string, string>, paths: list<string>, total: int, hashed: int, remaining: int, pass_complete: bool, next_cursor: ?string, bytes: int, unreadable: list<string>, skipped: list<string>, failed_surfaces: list<string>, surfaces: array<string, array{total: int, hashed: int}>}}
+     * @return array{files: array<string, string>, paths: list<string>, total: int, hashed: int, remaining: int, pass_complete: bool, next_cursor: ?string, bytes: int, unreadable: list<string>, skipped: list<string>, failed_surfaces: list<string>, surfaces: array<string, array{total: int, hashed: int}>}
      *         `files` maps relative path (surface/rest/of/path.php, forward
      *         slashes, no leading slash) to lowercase SHA-256 and holds only
      *         what was hashed this cycle; `paths` is the complete, sorted

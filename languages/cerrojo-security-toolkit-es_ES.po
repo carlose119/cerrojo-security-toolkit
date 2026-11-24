@@ -305,8 +305,8 @@ msgid "Coverage: this group is emitted only on eligible wp_headers front-end res
 msgstr "Cobertura: este grupo solo se emite en las respuestas front-end elegibles de wp_headers; verifica la respuesta final en cada punto de entrega."
 
 #: src/Admin/FileIntegrityAdmin.php:308
-msgid "Coverage: unknown for this cycle — the capture could not run, so nothing was compared."
-msgstr "Cobertura: desconocida en este ciclo — la captura no pudo ejecutarse, así que no se comparó nada."
+msgid "Coverage: unknown for this cycle — the capture could not run or found no watched file, so nothing was compared."
+msgstr "Cobertura: desconocida en este ciclo — la captura no pudo ejecutarse o no encontró ningún archivo vigilado, así que no se comparó nada."
 
 #: src/Admin/RestExposurePanel.php:137
 msgid "Current REST surface"
@@ -1133,8 +1133,8 @@ msgid "The scan could not run, so no comparison happened."
 msgstr "El análisis no pudo ejecutarse, así que no se realizó ninguna comparación."
 
 #: src/Admin/FileIntegrityAdmin.php:447
-msgid "The scan did not return a usable result, so no baseline was written. No change was made."
-msgstr "El análisis no devolvió un resultado utilizable, así que no se escribió ninguna línea base. No se realizó ningún cambio."
+msgid "The scan did not return a usable result or found no watched file, so no baseline was written. No change was made."
+msgstr "El escaneo no devolvió un resultado utilizable o no encontró ningún archivo vigilado, así que no se escribió ninguna línea base. No se hizo ningún cambio."
 
 #: src/Admin/SecurityHeadersAdmin.php:440
 msgid "The selected Cerrojo security-header preferences were already in the requested states."

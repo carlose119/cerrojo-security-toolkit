@@ -184,10 +184,13 @@ final class FileIntegrityAdmin
         }
 
         // The watched surfaces are validated before anything is written, so a
-        // save that selects no surface (an absent checkbox group included) is
-        // refused wholesale, exactly like a save without a usable recipient.
+        // save that would enable alerting without a surface (an absent checkbox
+        // group included) is refused wholesale, exactly like a save without a
+        // usable recipient. Disabling is never blocked by the selection: a save
+        // that clears the enable checkbox and every surface still turns alerting
+        // off, keeping the stored selection it cannot replace.
         $surfaces = FileIntegrityScanner::normalizeSurfaces($post['surfaces'] ?? null);
-        if ($surfaces === null) {
+        if ($surfaces === null && $enabledValue === '1') {
             $this->redirect('surfaces_required');
 
             return;
@@ -199,7 +202,7 @@ final class FileIntegrityAdmin
             ($this->cronClear)(self::CRON_HOOK);
         }
 
-        if (in_array($result, ['enabled', 'disabled', 'unchanged'], true)) {
+        if ($surfaces !== null && in_array($result, ['enabled', 'disabled', 'unchanged'], true)) {
             // The configuration was accepted; store the selection alongside it.
             // When the selection did not change, the configuration's own status
             // stays the record of this save.
@@ -373,7 +376,7 @@ final class FileIntegrityAdmin
         // comparison to describe. Claiming complete coverage here would be the exact
         // lie this feature exists to avoid.
         if ($status === 'scan_unavailable' || $status === 'baseline_unavailable') {
-            echo '<p>' . \esc_html__('Coverage: unknown for this cycle — the capture could not run, so nothing was compared.', 'cerrojo-security-toolkit') . '</p>';
+            echo '<p>' . \esc_html__('Coverage: unknown for this cycle — the capture could not run or found no watched file, so nothing was compared.', 'cerrojo-security-toolkit') . '</p>';
 
             return;
         }
@@ -529,7 +532,7 @@ final class FileIntegrityAdmin
             'check_recorded' => \__('A new check cycle ran and its outcome is recorded below.', 'cerrojo-security-toolkit'),
             'baseline_captured' => \__('A new baseline was captured, continuing from the stored rotation cursor.', 'cerrojo-security-toolkit'),
             'baseline_failed' => \__('The baseline could not be stored. No baseline was changed.', 'cerrojo-security-toolkit'),
-            'scan_unavailable' => \__('The scan did not return a usable result, so no baseline was written. No change was made.', 'cerrojo-security-toolkit'),
+            'scan_unavailable' => \__('The scan did not return a usable result or found no watched file, so no baseline was written. No change was made.', 'cerrojo-security-toolkit'),
             'acknowledged' => \__('Every listed finding from the last cycle that has a content hash was marked known; the corresponding alert stops until the acknowledgements are cleared. A listed finding without a content hash cannot be acknowledged, because there is no content hash to acknowledge.', 'cerrojo-security-toolkit'),
             'nothing_to_acknowledge' => \__('There are no valid listed findings to acknowledge. No change was made.', 'cerrojo-security-toolkit'),
             'cleared' => \__('All acknowledgements were cleared, forgetting which changes were acknowledged. A file that changes again alerts again; a change that the rolling reference already absorbed is not re-reported.', 'cerrojo-security-toolkit'),

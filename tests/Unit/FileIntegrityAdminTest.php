@@ -494,6 +494,18 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertArrayNotHasKey(FileIntegrityScanner::SURFACES_OPTION_NAME, $this->store);
         }
 
+        public function testDisablingIsNeverBlockedByAnEmptySurfaceSelection(): void
+        {
+            $harness = $this->admin(enabled: true);
+            $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['themes'];
+
+            $harness['admin']->handle($this->payload('save', ['recipients' => 'one@example.test']));
+
+            self::assertStringContainsString('disabled', $harness['redirects'][0], 'Clearing the enable checkbox must turn alerting off even when every surface is unchecked too.');
+            self::assertSame(['themes'], $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] ?? null, 'A save that cannot replace the selection keeps the stored one.');
+            self::assertFalse($harness['policy']->isEnabled());
+        }
+
         public function testSaveStoresTheSelectedSurfacesButWritesNothingWhenTheRecipientsAreInvalid(): void
         {
             $harness = $this->admin();
