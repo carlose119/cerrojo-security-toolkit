@@ -48,8 +48,8 @@ msgid "A new REST surface baseline was captured."
 msgstr "Se capturó una nueva línea base de la superficie REST."
 
 #: src/Admin/FileIntegrityAdmin.php:445
-msgid "A new baseline was captured from a fresh scan."
-msgstr "Se capturó una nueva línea base a partir de un análisis nuevo."
+msgid "A new baseline was captured, continuing from the stored rotation cursor."
+msgstr "Se capturó una línea base nueva, continuando desde el cursor de rotación almacenado."
 
 #: src/Admin/FileIntegrityAdmin.php:444
 msgid "A new check cycle ran and its outcome is recorded below."
@@ -215,9 +215,10 @@ msgstr "Diagnósticos de Cerrojo"
 msgid "Cerrojo only adds missing header names on eligible front-end responses. Existing names are matched case-insensitively; external spelling, values, and order remain unchanged."
 msgstr "Cerrojo solo añade los nombres de cabeceras que faltan en las respuestas front-end elegibles. Los nombres existentes se comparan sin distinguir mayúsculas; la ortografía, los valores y el orden externos quedan sin cambios."
 
-#: src/Admin/FileIntegrityAdmin.php:166
-msgid "Cerrojo scans the watched code files under plugins, mu-plugins and themes, keeps that list as a baseline, and reports files that are added, changed or removed since the baseline. One alert is attempted per change until the change is acknowledged. Cerrojo never writes, moves, deletes or repairs a watched file, and it never uploads content."
-msgstr "Cerrojo analiza los archivos de código vigilados bajo plugins, mu-plugins y temas, guarda esa lista como línea base e informa de los archivos que se hayan añadido, cambiado o eliminado desde la línea base. Se intenta una alerta por cada cambio hasta que el cambio se reconozca. Cerrojo nunca escribe, mueve, elimina ni repara un archivo vigilado, y nunca sube contenido."
+#: src/Admin/FileIntegrityAdmin.php:167
+msgid "Cerrojo scans the watched code files under %1$s, keeps that list as a baseline, and reports files that are added, changed or removed since the baseline. One alert is attempted per change until the change is acknowledged. Cerrojo never writes, moves, deletes or repairs a watched file, and it never uploads content."
+msgstr "Cerrojo analiza los archivos de código vigilados bajo %1$s, guarda esa lista como línea base e informa de los archivos que se hayan añadido, cambiado o eliminado desde la línea base. Se intenta una alerta por cada cambio hasta que el cambio se reconozca. Cerrojo nunca escribe, mueve, elimina ni repara un archivo vigilado, y nunca sube contenido."
+
 
 #: src/Admin/PluginActivityAlertAdmin.php:95
 msgid "Cerrojo sends one email per recipient so addresses are not disclosed to each other. An enabled setting means Cerrojo will attempt to send; it does not prove delivery."
@@ -759,6 +760,10 @@ msgstr "Solo se supervisa el contexto del sitio actual. En multisitio, no hay pr
 msgid "Only the current site context is observed. On multisite, remove_user_from_blog may bypass the role-removal hook through remove_all_caps. Cross-site fan-out, network deletion, and super-admin grants and revocations are outside this tool."
 msgstr "Solo se observa el contexto del sitio actual. En multisitio, remove_user_from_blog puede saltarse el hook de eliminación de rol mediante remove_all_caps. La propagación entre sitios, la eliminación en la red y las concesiones y revocaciones de superadministrador quedan fuera de esta herramienta."
 
+#: src/Admin/FileIntegrityAdmin.php:481
+msgid "Only the selected surfaces are enumerated, hashed and compared. A deselected surface is not watched: its changes are not detected until it is selected again. Its stored hashes are kept, so a change made while it was deselected is reported when it is turned back on. At least one surface must stay selected."
+msgstr "Solo se enumeran, se calcula el hash y se comparan las superficies seleccionadas. Una superficie deseleccionada no se vigila: sus cambios no se detectan hasta que se vuelva a seleccionar. Sus hashes almacenados se conservan, así que un cambio hecho mientras estaba deseleccionada se informa cuando se vuelva a activar. Al menos una superficie debe seguir seleccionada."
+
 #: src/Admin/SecurityDashboard.php:154
 msgid "Open WordPress Site Health"
 msgstr "Abrir Site Health de WordPress"
@@ -918,6 +923,10 @@ msgstr "Guardar los ajustes de alertas de actividad de plugins"
 #: src/Admin/SecurityDashboard.php:172
 msgid "Security headers"
 msgstr "Cabeceras de seguridad"
+
+#: src/Admin/FileIntegrityAdmin.php:538
+msgid "Select at least one watched surface. No change was made."
+msgstr "Selecciona al menos una superficie vigilada. No se realizó ningún cambio."
 
 #: src/Admin/SecurityHeadersAdmin.php:447
 msgid "Select one or more unique supported policies. No change was made."
@@ -1139,6 +1148,10 @@ msgstr "Las preferencias de Cerrojo para las cabeceras de seguridad seleccionada
 msgid "The selected route rules are invalid. No change was made."
 msgstr "Las reglas de rutas seleccionadas no son válidas. No se realizó ningún cambio."
 
+#: src/Admin/FileIntegrityAdmin.php:537
+msgid "The watched surfaces were saved. From the next cycle on, only the selected surfaces are enumerated, hashed and compared."
+msgstr "Las superficies vigiladas se guardaron. A partir del siguiente ciclo, solo se enumeran, se calcula el hash y se comparan las superficies seleccionadas."
+
 #: src/Admin/FileIntegrityAdmin.php:449
 msgid "There are no valid listed findings to acknowledge. No change was made."
 msgstr "No hay hallazgos enumerados válidos que reconocer. No se realizó ningún cambio."
@@ -1228,8 +1241,12 @@ msgid "Use these controls when you want to change and verify one policy at a tim
 msgstr "Usa estos controles cuando quieras cambiar y verificar una política cada vez."
 
 #: src/Admin/SecurityDashboard.php:104
-msgid "Watch the executable code of plugins, mu-plugins and themes for additions, removals and changes against a stored baseline."
-msgstr "Vigila el código ejecutable de plugins, mu-plugins y temas para detectar adiciones, eliminaciones y cambios respecto a una línea base almacenada."
+msgid "Watch the selected WordPress code surfaces for additions, removals and changes against a stored baseline; the tripwire section below names which surfaces are watched."
+msgstr "Vigila las superficies de código de WordPress seleccionadas para detectar agregados, bajas y cambios contra una línea base almacenada; la sección del tripwire más abajo indica qué superficies están vigiladas."
+
+#: src/Admin/FileIntegrityAdmin.php:477
+msgid "Watched surfaces"
+msgstr "Superficies vigiladas"
 
 #: src/Admin/XmlRpcPingbackAdmin.php:93
 msgid "When enabled, native pingback consumers stop working. Trackbacks, outbound pings, REST, and Application Passwords are not changed."
@@ -1268,8 +1285,8 @@ msgid "WordPress could not save the administrator account alert settings. The pr
 msgstr "WordPress no pudo guardar los ajustes de alertas de cuentas de administrador. Puede que el estado anterior permanezca."
 
 #: src/Admin/FileIntegrityAdmin.php:453
-msgid "WordPress could not save the configuration. The prior state may remain."
-msgstr "WordPress no pudo guardar la configuración. Puede que el estado anterior permanezca."
+msgid "WordPress did not store every change from this save. Any setting that failed to save keeps its prior value."
+msgstr "WordPress no guardó todos los cambios de este guardado. Todo ajuste que no se pudo guardar conserva su valor anterior."
 
 #: src/Admin/PluginActivityAlertAdmin.php:149
 msgid "WordPress could not save the plugin activity email alert settings. The prior state may remain."

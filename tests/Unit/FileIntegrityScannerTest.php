@@ -495,6 +495,79 @@ final class FileIntegrityScannerTest extends TestCase
 
     // ------------------------------------------------------------------
 
+    public function testASurfaceSelectionEnumeratesAndHashesOnlyTheSelectedSurfaces(): void
+    {
+        $root = $this->tempTree();
+        $this->write($root, 'plugins/a/a.php', '<?php a;');
+        $this->write($root, 'mu-plugins/dropin.php', '<?php dropin;');
+        $this->write($root, 'themes/t/t.php', '<?php t;');
+
+        $scan = $this->makeScanner($root)->scan(null, ['themes']);
+
+        self::assertSame(['themes/t/t.php' => hash('sha256', '<?php t;')], $scan['files'], 'Only the selected surface is hashed.');
+        self::assertSame(['themes/t/t.php'], $scan['paths'], 'A surface outside the selection must not appear in paths.');
+        self::assertSame(1, $scan['total']);
+        self::assertSame(1, $scan['hashed']);
+        self::assertSame(0, $scan['remaining']);
+        self::assertTrue($scan['pass_complete']);
+        self::assertSame('themes/t/t.php', $scan['next_cursor']);
+        self::assertSame(['themes' => ['total' => 1, 'hashed' => 1]], $scan['surfaces'], 'A surface outside the selection must not appear in surfaces.');
+
+        $enumerated = $this->makeScanner($root)->enumerate(['plugins']);
+        self::assertSame(['plugins/a/a.php'], array_keys($enumerated['paths']));
+        self::assertSame(['plugins' => ['total' => 1]], $enumerated['surfaces']);
+    }
+
+    public function testTheCursorRotatesOverTheReducedSelection(): void
+    {
+        // Thirty-two candidates of MAX_FILE_BYTES exactly fill the byte budget;
+        // the thirty-third stops the pass, so the cursor carries over cycles.
+        $scanner = $this->fakeScanner(
+            [...$this->packKeys(32), 'mu-plugins/m.php', 'themes/t.php'],
+            sizeOf: static fn (): int => self::FULL_FILE_SIZE,
+        );
+
+        $first = $scanner->scan(null, ['plugins', 'themes']);
+
+        self::assertContains('themes/t.php', $first['paths'], 'The selected surface stays in the reduced enumeration.');
+        self::assertNotContains('mu-plugins/m.php', $first['paths'], 'A deselected surface is never enumerated.');
+        self::assertSame(33, $first['total'], 'The reduced enumeration drives total.');
+        self::assertSame(32, $first['hashed']);
+        self::assertSame('plugins/p32.php', $first['next_cursor']);
+
+        $second = $scanner->scan($first['next_cursor'], ['plugins', 'themes']);
+
+        // The cycle after the last selected key wraps to the first key of the
+        // reduced set, so themes/t.php is visited in its own turn.
+        $expected = array_map(static fn (int $index): string => sprintf('plugins/p%02d.php', $index), range(1, 31));
+        self::assertSame([...$expected, 'themes/t.php'], array_keys($second['files']), 'The rotation wraps inside the reduced set.');
+        self::assertSame('plugins/p31.php', $second['next_cursor']);
+    }
+
+    public function testASelectionWithoutValidSurfacesEnumeratesNothing(): void
+    {
+        $root = $this->tempTree();
+        $this->write($root, 'plugins/a.php', '<?php a;');
+
+        foreach ([[], ['uploads']] as $selection) {
+            $result = $this->makeScanner($root)->scan(null, $selection);
+            self::assertSame(0, $result['total']);
+            self::assertSame([], $result['paths']);
+            self::assertSame([], $result['files']);
+            self::assertSame([], $result['surfaces'], 'No surface can appear when none was selected.');
+        }
+    }
+
+    public function testNormalizeSurfacesDropsUnknownNamesAndOrdersCanonically(): void
+    {
+        self::assertSame(['plugins', 'themes'], FileIntegrityScanner::normalizeSurfaces(['themes', 'plugins', 'uploads']));
+        self::assertSame(['plugins'], FileIntegrityScanner::normalizeSurfaces(['plugins', 'plugins']));
+        self::assertSame(['mu-plugins'], FileIntegrityScanner::normalizeSurfaces(['mu-plugins']));
+        self::assertNull(FileIntegrityScanner::normalizeSurfaces(null), 'An absent selection yields null so the caller decides the default.');
+        self::assertNull(FileIntegrityScanner::normalizeSurfaces([]));
+        self::assertNull(FileIntegrityScanner::normalizeSurfaces(['uploads', 5]));
+    }
+
     private function makeScanner(
         string $root,
         ?callable $hasher = null,

@@ -38,6 +38,7 @@ namespace {
 namespace BastionSecurityWP\Tests\Unit {
     use BastionSecurityWP\Admin\FileIntegrityAdmin;
     use BastionSecurityWP\FileIntegrityBaseline;
+    use BastionSecurityWP\FileIntegrityScanner;
     use BastionSecurityWP\Security\FileIntegrityAlertPolicy;
     use PHPUnit\Framework\TestCase;
 
@@ -122,7 +123,7 @@ namespace BastionSecurityWP\Tests\Unit {
             $harness = $this->admin();
 
             $_POST = [];
-            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test']));
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test', 'surfaces' => ['plugins', 'mu-plugins', 'themes']]));
 
             $saved = $this->store[FileIntegrityAlertPolicy::OPTION_NAME] ?? null;
             self::assertIsArray($saved);
@@ -137,7 +138,7 @@ namespace BastionSecurityWP\Tests\Unit {
             $harness = $this->admin(enabled: true);
 
             $_POST = [];
-            $harness['admin']->handle($this->payload('save', ['recipients' => 'admin@example.test']));
+            $harness['admin']->handle($this->payload('save', ['recipients' => 'admin@example.test', 'surfaces' => ['plugins', 'mu-plugins', 'themes']]));
 
             $saved = $this->store[FileIntegrityAlertPolicy::OPTION_NAME] ?? null;
             self::assertIsArray($saved);
@@ -152,14 +153,14 @@ namespace BastionSecurityWP\Tests\Unit {
             $harness = $this->admin();
 
             $_POST = [];
-            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'not-an-email']));
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'not-an-email', 'surfaces' => ['plugins']]));
             self::assertStringContainsString('invalid_recipients', $harness['redirects'][0]);
 
-            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => '  ']));
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => '  ', 'surfaces' => ['plugins']]));
             self::assertStringContainsString('recipients_required', $harness['redirects'][1]);
 
-            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test']));
-            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test']));
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test', 'surfaces' => ['plugins', 'mu-plugins', 'themes']]));
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test', 'surfaces' => ['plugins', 'mu-plugins', 'themes']]));
             self::assertStringContainsString('unchanged', $harness['redirects'][3]);
             self::assertIsArray($this->store[FileIntegrityAlertPolicy::OPTION_NAME] ?? null);
         }
@@ -477,6 +478,80 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertStringContainsString("recorded at that file's first turn", $decoded, 'The pending state states when the content is recorded and when it is first compared.');
             self::assertStringNotContainsString("compared at that file's next turn", $decoded, 'The pass-progress sentence says detected, not compared; the old false promise must be gone.');
             self::assertStringNotContainsString('it alerts again on the next cycle until it is acknowledged', $decoded);
+        }
+
+        public function testSaveRefusesAnEmptySurfaceSelectionAndWritesNothing(): void
+        {
+            $harness = $this->admin();
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test']));
+            self::assertStringContainsString('surfaces_required', $harness['redirects'][0], 'A save that selects no surface is refused with its own status.');
+            self::assertArrayNotHasKey(FileIntegrityAlertPolicy::OPTION_NAME, $this->store, 'A refused surface selection writes nothing at all.');
+
+            $harness['admin']->handle($this->payload('save', ['enabled' => '1', 'recipients' => 'one@example.test', 'surfaces' => ['uploads']]));
+            self::assertStringContainsString('surfaces_required', $harness['redirects'][1], 'Unknown surface names dropped to nothing are refused too.');
+            self::assertArrayNotHasKey(FileIntegrityScanner::SURFACES_OPTION_NAME, $this->store);
+        }
+
+        public function testSaveStoresTheSelectedSurfacesButWritesNothingWhenTheRecipientsAreInvalid(): void
+        {
+            $harness = $this->admin();
+
+            $_POST = [];
+            $harness['admin']->handle($this->payload('save', [
+                'enabled' => '1',
+                'recipients' => 'one@example.test',
+                'surfaces' => ['themes', 'plugins', 'uploads'],
+            ]));
+            self::assertStringContainsString('surfaces_saved', $harness['redirects'][0]);
+            self::assertSame(
+                ['plugins', 'themes'],
+                $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] ?? null,
+                'Unknown names are dropped and the stored selection is the canonical subset.',
+            );
+            self::assertTrue(($this->store[FileIntegrityAlertPolicy::OPTION_NAME] ?? [])['enabled'] ?? false, 'The alert configuration is still stored by the same save.');
+
+            $fresh = $this->admin();
+            $_POST = [];
+            $fresh['admin']->handle($this->payload('save', [
+                'enabled' => '1',
+                'recipients' => 'not-an-email',
+                'surfaces' => ['plugins'],
+            ]));
+            self::assertStringContainsString('invalid_recipients', $fresh['redirects'][0], 'A recipient refusal still refuses the whole save.');
+            self::assertArrayNotHasKey(FileIntegrityScanner::SURFACES_OPTION_NAME, $this->store, 'A refused save does not store the selection either.');
+        }
+
+        public function testThePanelRendersTheThreeSurfaceCheckboxesAndTheDeselectionLimit(): void
+        {
+            $harness = $this->admin();
+            $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['plugins'];
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringContainsString('name="surfaces[]" value="plugins" checked', $decoded, 'The stored selection is pre-checked.');
+            self::assertStringContainsString('name="surfaces[]" value="mu-plugins"', $decoded);
+            self::assertStringNotContainsString('name="surfaces[]" value="mu-plugins" checked', $decoded, 'An unselected surface renders unchecked.');
+            self::assertStringNotContainsString('name="surfaces[]" value="themes" checked', $decoded, 'An unselected surface renders unchecked.');
+            self::assertStringContainsString('Only the selected surfaces are enumerated, hashed and compared', $decoded);
+            self::assertStringContainsString('its changes are not detected until it is selected again', $decoded, 'The panel states the deselection limit.');
+            self::assertStringContainsString('a change made while it was deselected is reported when it is turned back on', $decoded, 'The panel states that stored hashes are kept across the deselection.');
+        }
+
+        public function testTheIntroductionNamesTheSurfacesCurrentlyWatched(): void
+        {
+            $harness = $this->admin();
+            $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['themes'];
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringContainsString('under themes', $decoded, 'The coverage introduction names the surfaces currently watched.');
+            self::assertStringNotContainsString('plugins, mu-plugins and themes', $decoded, 'The fixed three-surface claim must be gone from the introduction.');
         }
 
         /**

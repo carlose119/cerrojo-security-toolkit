@@ -35,6 +35,8 @@ final class FileIntegrityScanner
     public const MAX_FILE_BYTES = 8388608;
     /** @var list<string> */
     public const SURFACES = ['plugins', 'mu-plugins', 'themes'];
+    /** The stored watched-surface selection: a subset of SURFACES; absent or unusable reads as all three. */
+    public const SURFACES_OPTION_NAME = 'bastion_security_wp_file_integrity_surfaces';
     /** @var list<string> */
     public const EXTENSIONS = ['php', 'phtml', 'php5', 'php7', 'php8', 'inc'];
 
@@ -81,7 +83,8 @@ final class FileIntegrityScanner
      * relative path), so two scans of the same tree yield the same arrays.
      *
      * @param string|null $cursor the last path hashed by the previous cycle, or null for a fresh pass from the first key
-     * @return array{files: array<string, string>, paths: list<string>, total: int, hashed: int, remaining: int, pass_complete: bool, next_cursor: ?string, bytes: int, unreadable: list<string>, skipped: list<string>, failed_surfaces: list<string>, surfaces: array<string, array{total: int, hashed: int}>}
+     * @param list<string>|null $surfaces the watched-surface selection; null keeps every surface so existing callers are unchanged, and a selection with no valid surface enumerates nothing
+     * @return array{files: array<string, string>, paths: list<string>, total: int, hashed: int, remaining: int, pass_complete: bool, next_cursor: ?string, bytes: int, unreadable: list<string>, skipped: list<string>, failed_surfaces: list<string>, surfaces: array<string, array{total: int, hashed: int}>}}
      *         `files` maps relative path (surface/rest/of/path.php, forward
      *         slashes, no leading slash) to lowercase SHA-256 and holds only
      *         what was hashed this cycle; `paths` is the complete, sorted
@@ -99,10 +102,10 @@ final class FileIntegrityScanner
      *         makes the capture partial and never a clean comparison. All
      *         lists and the path map are sorted.
      */
-    public function scan(?string $cursor = null): array
+    public function scan(?string $cursor = null, ?array $surfaces = null): array
     {
         try {
-            $enumerated = $this->enumerate();
+            $enumerated = $this->enumerate($surfaces);
             if ($enumerated === null) {
                 return self::empty();
             }
@@ -116,9 +119,9 @@ final class FileIntegrityScanner
             $bytes = 0;
             $lastKey = null;
 
-            $surfaces = [];
-            foreach (self::SURFACES as $surface) {
-                $surfaces[$surface] = ['total' => $enumerated['surfaces'][$surface]['total'] ?? 0, 'hashed' => 0];
+            $surfaceProgress = [];
+            foreach ($enumerated['surfaces'] as $surface => $enumeratedSurface) {
+                $surfaceProgress[(string) $surface] = ['total' => $enumeratedSurface['total'], 'hashed' => 0];
             }
 
             $start = 0;
@@ -157,7 +160,7 @@ final class FileIntegrityScanner
                         } else {
                             $files[$key] = $hash;
                             $bytes += $size;
-                            ++$surfaces[$surface]['hashed'];
+                            ++$surfaceProgress[$surface]['hashed'];
                         }
                     }
                 }
@@ -185,7 +188,7 @@ final class FileIntegrityScanner
                 'unreadable' => $unreadable,
                 'skipped' => $skipped,
                 'failed_surfaces' => $enumerated['failed_surfaces'],
-                'surfaces' => $surfaces,
+                'surfaces' => $surfaceProgress,
             ];
         } catch (Throwable) {
             return self::empty();
@@ -193,28 +196,39 @@ final class FileIntegrityScanner
     }
 
     /**
-     * Every candidate path under the three surfaces, without hashing any of them.
-     * The walk is cheap, so a cycle can always know the complete set of watched
-     * paths and report additions and removals immediately, whatever slice of the
-     * contents it happens to hash this time.
+     * Every candidate path under the selected surfaces, without hashing any of
+     * them. The walk is cheap, so a cycle can always know the complete set of
+     * watched paths and report additions and removals immediately, whatever
+     * slice of the contents it happens to hash this time. With no selection the
+     * three surfaces are walked, exactly as every earlier caller saw.
      *
+     * @param list<string>|null $surfaces the watched-surface selection; null keeps every surface
      * @return array{paths: array<string, string>, total: int, surfaces: array<string, array{total: int}>, failed_surfaces: list<string>}|null
      */
-    public function enumerate(): ?array
+    public function enumerate(?array $surfaces = null): ?array
     {
         try {
+            $active = $surfaces === null ? self::SURFACES : (self::normalizeSurfaces($surfaces) ?? []);
             $root = rtrim((string) ($this->contentDir)(), "/\\");
             if ($root === '') {
-                return ['paths' => [], 'total' => 0, 'surfaces' => [], 'failed_surfaces' => []];
+                $empty = ['paths' => [], 'total' => 0, 'surfaces' => [], 'failed_surfaces' => []];
+                foreach ($active as $surface) {
+                    $empty['surfaces'][$surface] = ['total' => 0];
+                }
+
+                return $empty;
             }
 
             $paths = [];
-            $surfaces = [];
+            $surfacesProgress = [];
+            foreach ($active as $surface) {
+                $surfacesProgress[$surface] = ['total' => 0];
+            }
             $failedSurfaces = [];
 
-            foreach (self::SURFACES as $surface) {
+            foreach ($active as $surface) {
                 $surfaceDir = $root . DIRECTORY_SEPARATOR . $surface;
-                $surfaces[$surface] = ['total' => 0];
+                $surfacesProgress[$surface] = ['total' => 0];
 
                 if (! (bool) ($this->exists)($surfaceDir)) {
                     continue;
@@ -241,14 +255,14 @@ final class FileIntegrityScanner
                         continue;
                     }
 
-                    ++$surfaces[$surface]['total'];
+                    ++$surfacesProgress[$surface]['total'];
                     $paths[$surface . '/' . $relative] = (string) $path;
                 }
             }
 
             ksort($paths, SORT_STRING);
 
-            return ['paths' => $paths, 'total' => count($paths), 'surfaces' => $surfaces, 'failed_surfaces' => $failedSurfaces];
+            return ['paths' => $paths, 'total' => count($paths), 'surfaces' => $surfacesProgress, 'failed_surfaces' => $failedSurfaces];
         } catch (Throwable) {
             return null;
         }
@@ -271,6 +285,36 @@ final class FileIntegrityScanner
             'failed_surfaces' => [],
             'surfaces' => [],
         ];
+    }
+
+    /**
+     * Normalize a raw watched-surface value into the canonical ordered subset of
+     * SURFACES it names: unknown or non-string names are dropped, duplicates
+     * collapse. It returns null when no valid surface remains, and the caller
+     * decides what null means: a stored option that yields null reads as the
+     * default of all three surfaces, while a save that yields null is refused,
+     * because a selection must keep at least one surface.
+     *
+     * @return list<string>|null
+     */
+    public static function normalizeSurfaces(mixed $raw): ?array
+    {
+        if (! is_array($raw)) {
+            return null;
+        }
+
+        $selected = [];
+        foreach ($raw as $name) {
+            if (is_string($name) && in_array($name, self::SURFACES, true)) {
+                $selected[$name] = true;
+            }
+        }
+
+        if ($selected === []) {
+            return null;
+        }
+
+        return array_values(array_filter(self::SURFACES, static fn (string $surface): bool => isset($selected[$surface])));
     }
 
     /**

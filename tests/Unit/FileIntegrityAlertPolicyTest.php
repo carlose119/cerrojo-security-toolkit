@@ -662,6 +662,32 @@ final class FileIntegrityAlertPolicyTest extends TestCase
      * @param array<string, string>|null $baselineFiles
      * @param array<string, mixed> $scanExtra
      */
+    public function testAFrozenManifestAtTheFootprintGuardIsReportedAsBoundedCoverage(): void
+    {
+        // The written manifest is the selected surfaces' enumeration plus the
+        // frozen entries of the unselected ones, so the footprint guard has to be
+        // judged on that total: a cut manifest must never read as complete.
+        $mails = [];
+        $frozen = [];
+        for ($i = 0; $i < FileIntegrityBaseline::MAX_PATHS; ++$i) {
+            $frozen[sprintf('themes/t%05d.php', $i)] = str_repeat('a', 64);
+        }
+
+        $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['plugins'];
+
+        $policy = $this->policy(
+            ['plugins/p.php' => str_repeat('b', 64)],
+            false,
+            $mails,
+            $frozen,
+            ['paths' => ['plugins/p.php'], 'total' => 1, 'hashed' => 1, 'remaining' => 0, 'pass_complete' => true, 'next_cursor' => 'plugins/p.php'],
+        );
+        $result = $policy->check();
+
+        self::assertSame(1, $result['added'], 'The selected surface has no stored entry for that path.');
+        self::assertTrue($result['truncated'], 'The written manifest exceeds the footprint guard even though the enumeration does not.');
+    }
+
     private function policy(
         array $scanFiles,
         bool $enabled,
@@ -759,6 +785,212 @@ final class FileIntegrityAlertPolicyTest extends TestCase
             },
             clock: static fn (): int => 1_700_000_200,
         );
+    }
+
+    public function testTheCyclePassesTheStoredSelectionIntoTheScanSeamAndScopesTheComparison(): void
+    {
+        $this->store[FileIntegrityBaseline::OPTION_NAME] = [
+            'schema' => FileIntegrityBaseline::SCHEMA_VERSION,
+            'captured_at' => 1_700_000_000,
+            'files' => ['plugins/stale.php' => self::HASH_A, 'themes/kept.php' => self::HASH_A],
+            'total' => 2,
+            'truncated' => false,
+            'cursor' => null,
+        ];
+        $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['themes'];
+
+        $store = &$this->store;
+        $received = [];
+        $scan = static function (?string $cursor = null, ?array $surfaces = null) use (&$received): array {
+            $received[] = [$cursor, $surfaces];
+
+            // Only the selected surface is enumerated and hashed this cycle.
+            return [
+                'files' => ['themes/kept.php' => self::HASH_A],
+                'paths' => ['themes/kept.php'],
+                'total' => 1,
+                'hashed' => 1,
+                'remaining' => 0,
+                'pass_complete' => true,
+                'next_cursor' => 'themes/kept.php',
+                'bytes' => 10,
+                'unreadable' => [],
+                'skipped' => [],
+                'failed_surfaces' => [],
+            ];
+        };
+
+        $baseline = new FileIntegrityBaseline(
+            readOption: static function () use (&$store): mixed {
+                return $store[FileIntegrityBaseline::OPTION_NAME] ?? null;
+            },
+            writeOption: static function (array $value) use (&$store): bool {
+                $store[FileIntegrityBaseline::OPTION_NAME] = $value;
+
+                return true;
+            },
+            deleteOption: static function () use (&$store): bool {
+                unset($store[FileIntegrityBaseline::OPTION_NAME]);
+
+                return true;
+            },
+            clock: static fn (): int => 1_700_000_100,
+        );
+        $this->store[FileIntegrityAlertPolicy::OPTION_NAME] = [
+            'schema' => 1,
+            'enabled' => true,
+            'recipients' => ['admin@example.test'],
+            'known' => [],
+        ];
+        $policy = new FileIntegrityAlertPolicy(
+            $baseline,
+            $scan,
+            readOption: static function (string $name) use (&$store): mixed {
+                return $store[$name] ?? null;
+            },
+            writeOption: static function (string $name, array $value) use (&$store): bool {
+                $store[$name] = $value;
+
+                return true;
+            },
+            mail: static fn (array $to, string $subject, string $message): bool => true,
+            clock: static fn (): int => 1_700_000_200,
+        );
+
+        $result = $policy->check();
+
+        self::assertSame([[null, ['themes']]], $received, 'The scan seam must carry the stored selection as its second argument.');
+        self::assertSame('checked', $result['status']);
+        self::assertSame(0, $result['removed'], 'A deselected surface path must not be reported removed.');
+        self::assertSame(0, $result['added']);
+        self::assertSame(0, $result['changed']);
+        $stored = $this->storedBaseline();
+        self::assertSame(
+            ['plugins/stale.php' => self::HASH_A, 'themes/kept.php' => self::HASH_A],
+            $stored['files'],
+            "The deselected surface's manifest entries are kept byte-identical.",
+        );
+        self::assertSame('themes/kept.php', $stored['cursor']);
+    }
+
+    public function testADeselectedSurfaceReportsNoMovementsAndKeepsItsManifestEntries(): void
+    {
+        $mails = [];
+        $this->store[FileIntegrityBaseline::OPTION_NAME] = [
+            'schema' => FileIntegrityBaseline::SCHEMA_VERSION,
+            'captured_at' => 1_700_000_000,
+            'files' => ['plugins/stale.php' => self::HASH_A, 'themes/kept.php' => self::HASH_A],
+            'total' => 2,
+            'truncated' => false,
+            'cursor' => null,
+        ];
+        $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['themes'];
+        $policy = $this->policy(
+            ['themes/kept.php' => self::HASH_A],
+            false,
+            $mails,
+            null,
+            ['paths' => ['themes/kept.php'], 'total' => 1, 'hashed' => 1, 'pass_complete' => true],
+        );
+
+        $result = $policy->check();
+
+        self::assertSame('checked', $result['status']);
+        self::assertSame(0, $result['added']);
+        self::assertSame(0, $result['removed'], 'A deselected surface is never reported removed.');
+        self::assertSame(0, $result['changed']);
+        self::assertSame(
+            ['plugins/stale.php' => self::HASH_A, 'themes/kept.php' => self::HASH_A],
+            $this->storedBaseline()['files'],
+            "The deselected surface's stored hashes stay as they were.",
+        );
+    }
+
+    public function testReselectingASurfaceReportsAChangeMadeWhileItWasDeselectedWithoutPhantomAdditions(): void
+    {
+        $mails = [];
+        $this->store[FileIntegrityBaseline::OPTION_NAME] = [
+            'schema' => FileIntegrityBaseline::SCHEMA_VERSION,
+            'captured_at' => 1_700_000_000,
+            'files' => ['plugins/a.php' => self::HASH_A, 'themes/t.php' => self::HASH_A],
+            'total' => 2,
+            'truncated' => false,
+            'cursor' => null,
+        ];
+        $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['plugins', 'themes'];
+        $policy = $this->policy(
+            ['themes/t.php' => self::HASH_B],
+            false,
+            $mails,
+            null,
+            ['paths' => ['plugins/a.php', 'themes/t.php'], 'total' => 2, 'hashed' => 1, 'remaining' => 1, 'pass_complete' => false],
+        );
+
+        $result = $policy->check();
+
+        self::assertSame(0, $result['added'], 'A re-selected surface must not report its own previous entries as added.');
+        self::assertSame(0, $result['removed']);
+        self::assertSame(1, $result['changed'], 'A change made while the surface was deselected surfaces as a change at the first re-selected cycle.');
+        self::assertSame(
+            ['path' => 'themes/t.php', 'change' => 'changed', 'hash' => self::HASH_B],
+            $result['findings'][0],
+        );
+    }
+
+    public function testReselectingASurfaceReportsADeletionMadeWhileItWasDeselectedAsRemoved(): void
+    {
+        $mails = [];
+        $this->store[FileIntegrityBaseline::OPTION_NAME] = [
+            'schema' => FileIntegrityBaseline::SCHEMA_VERSION,
+            'captured_at' => 1_700_000_000,
+            'files' => ['plugins/a.php' => self::HASH_A, 'themes/gone.php' => self::HASH_B],
+            'total' => 2,
+            'truncated' => false,
+            'cursor' => null,
+        ];
+        // No stored selection: the default of all three surfaces applies.
+        $policy = $this->policy(
+            ['plugins/a.php' => self::HASH_A],
+            false,
+            $mails,
+            null,
+            ['paths' => ['plugins/a.php'], 'total' => 1, 'hashed' => 1, 'pass_complete' => true],
+        );
+
+        $result = $policy->check();
+
+        self::assertSame(0, $result['added'], 'A deleted path of a surface that is watched again must not be reported as added.');
+        self::assertSame(1, $result['removed'], 'A deletion made while the surface was deselected surfaces as a removal at the first re-selected cycle.');
+        self::assertSame(
+            ['plugins/a.php' => self::HASH_A],
+            $this->storedBaseline()['files'],
+            'The removed path leaves the manifest once its surface is selected and the enumeration no longer holds it.',
+        );
+    }
+
+    public function testAnAbsentOrInvalidStoredSelectionReadsAsAllThreeSurfaces(): void
+    {
+        $mails = [];
+        $policy = $this->policy(['plugins/a.php' => self::HASH_A], false, $mails);
+
+        self::assertSame(FileIntegrityScanner::SURFACES, $policy->surfaces(), 'An absent selection watches all three surfaces.');
+
+        $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME] = ['uploads'];
+        self::assertSame(FileIntegrityScanner::SURFACES, $policy->surfaces(), 'Anything that yields no valid surface reads as the default of all three.');
+    }
+
+    public function testSetSurfacesStoresAValidSelectionAndRefusesAnEmptyOne(): void
+    {
+        $mails = [];
+        $policy = $this->policy(['plugins/a.php' => self::HASH_A], false, $mails);
+
+        self::assertSame('surfaces_required', $policy->setSurfaces(['uploads']));
+        self::assertArrayNotHasKey(FileIntegrityScanner::SURFACES_OPTION_NAME, $this->store, 'A refused empty selection writes nothing.');
+
+        self::assertSame('surfaces_saved', $policy->setSurfaces(['themes', 'plugins']));
+        self::assertSame(['plugins', 'themes'], $this->store[FileIntegrityScanner::SURFACES_OPTION_NAME], 'The stored selection is the canonical ordered subset.');
+
+        self::assertSame('unchanged', $policy->setSurfaces(['plugins', 'themes']));
     }
 
     /** @return array<string, mixed> */

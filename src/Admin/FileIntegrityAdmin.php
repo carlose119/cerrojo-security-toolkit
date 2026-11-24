@@ -59,7 +59,7 @@ final class FileIntegrityAdmin
         ?callable $cronClear = null,
         ?callable $formatDate = null,
     ) {
-        $this->scan = Closure::fromCallable($scan ?? static fn (?string $cursor = null): array => (new FileIntegrityScanner())->scan($cursor));
+        $this->scan = Closure::fromCallable($scan ?? fn (?string $cursor = null, ?array $surfaces = null): array => (new FileIntegrityScanner())->scan($cursor, $surfaces ?? $this->policy->surfaces()));
         $this->currentUserCan = Closure::fromCallable($currentUserCan ?? static fn (string $capability): bool => \current_user_can($capability));
         $this->verifyNonce = Closure::fromCallable($verifyNonce ?? static fn (string $nonce, string $action): bool => (bool) \wp_verify_nonce($nonce, $action));
         $this->nonceField = Closure::fromCallable($nonceField ?? static fn (string $action): string => (string) \wp_nonce_field($action, '_wpnonce', true, false));
@@ -160,14 +160,15 @@ final class FileIntegrityAdmin
 
         $state = $this->policy->state();
         $result = $this->policy->lastResult();
+        $surfaces = $this->policy->surfaces();
 
         echo '<section id="bastion-file-integrity" class="bastion-tools bastion-file-integrity"><h2>' . \esc_html__('File change tripwire', 'cerrojo-security-toolkit') . '</h2>';
         $this->renderNotice($notice);
-        echo '<p>' . \esc_html__('Cerrojo scans the watched code files under plugins, mu-plugins and themes, keeps that list as a baseline, and reports files that are added, changed or removed since the baseline. One alert is attempted per change until the change is acknowledged. Cerrojo never writes, moves, deletes or repairs a watched file, and it never uploads content.', 'cerrojo-security-toolkit') . '</p>';
+        echo '<p>' . \esc_html(\sprintf(\__('Cerrojo scans the watched code files under %1$s, keeps that list as a baseline, and reports files that are added, changed or removed since the baseline. One alert is attempted per change until the change is acknowledged. Cerrojo never writes, moves, deletes or repairs a watched file, and it never uploads content.', 'cerrojo-security-toolkit'), \implode(', ', $surfaces))) . '</p>';
         echo '<p>' . \esc_html__('This is a tripwire, not an integrity guarantee: a change is not proof of a compromise, and a comparison that reports nothing is not proof that the site is clean. Uploads, WordPress core files, and non-PHP files are not watched, and a bounded scan can leave coverage incomplete.', 'cerrojo-security-toolkit') . '</p>';
         $this->renderStatus($state);
         $this->renderLastCycle($result);
-        $this->renderForms($state);
+        $this->renderForms($state, $surfaces);
         echo '</section>';
     }
 
@@ -182,10 +183,28 @@ final class FileIntegrityAdmin
             return;
         }
 
+        // The watched surfaces are validated before anything is written, so a
+        // save that selects no surface (an absent checkbox group included) is
+        // refused wholesale, exactly like a save without a usable recipient.
+        $surfaces = FileIntegrityScanner::normalizeSurfaces($post['surfaces'] ?? null);
+        if ($surfaces === null) {
+            $this->redirect('surfaces_required');
+
+            return;
+        }
+
         $result = $this->policy->setConfiguration($enabledValue === '1', $recipients);
         if ($result === 'disabled') {
             // The scheduled daily check exists only while alerting is enabled.
             ($this->cronClear)(self::CRON_HOOK);
+        }
+
+        if (in_array($result, ['enabled', 'disabled', 'unchanged'], true)) {
+            // The configuration was accepted; store the selection alongside it.
+            // When the selection did not change, the configuration's own status
+            // stays the record of this save.
+            $surfacesResult = $this->policy->setSurfaces($post['surfaces'] ?? null);
+            $result = $surfacesResult === 'unchanged' ? $result : $surfacesResult;
         }
 
         $this->redirect($result);
@@ -196,9 +215,12 @@ final class FileIntegrityAdmin
         // The rotation cursor belongs to the stored manifest: the fresh capture
         // continues where the last cycle stopped instead of re-hashing from the
         // start. Without a usable baseline the pass starts from the first key.
+        // The scan and the capture are scoped to the stored selection, so the
+        // deselected surfaces' manifest entries stay frozen.
+        $surfaces = $this->policy->surfaces();
         $previous = $this->baseline->read();
         try {
-            $scan = ($this->scan)(is_array($previous) && is_string($previous['cursor'] ?? null) ? $previous['cursor'] : null);
+            $scan = ($this->scan)(is_array($previous) && is_string($previous['cursor'] ?? null) ? $previous['cursor'] : null, $surfaces);
         } catch (\Throwable) {
             $scan = null;
         }
@@ -212,7 +234,7 @@ final class FileIntegrityAdmin
         }
 
         $cursor = is_array($scan) && is_string($scan['next_cursor'] ?? null) ? $scan['next_cursor'] : null;
-        $this->redirect($this->baseline->capture($files, $paths, $cursor) ? 'baseline_captured' : 'baseline_failed');
+        $this->redirect($this->baseline->capture($files, $paths, $cursor, null, $surfaces) ? 'baseline_captured' : 'baseline_failed');
     }
 
     /** @return array<string, string> */
@@ -437,8 +459,10 @@ final class FileIntegrityAdmin
         };
     }
 
-    /** @param array{enabled: bool, recipients: list<string>, known: int} $state */
-    private function renderForms(array $state): void
+    /** @param array{enabled: bool, recipients: list<string>, known: int} $state
+     * @param list<string> $surfaces
+     */
+    private function renderForms(array $state, array $surfaces): void
     {
         echo '<h3>' . \esc_html__('Commands', 'cerrojo-security-toolkit') . '</h3>';
 
@@ -450,6 +474,11 @@ final class FileIntegrityAdmin
         echo '<p><label for="bastion-file-integrity-recipients"><strong>' . \esc_html__('Recipients', 'cerrojo-security-toolkit') . '</strong></label></p>';
         echo '<textarea id="bastion-file-integrity-recipients" name="recipients" rows="5" class="large-text" aria-describedby="bastion-file-integrity-recipients-help">' . \esc_textarea(implode("\n", $state['recipients'])) . '</textarea>';
         echo '<p id="bastion-file-integrity-recipients-help" class="description">' . \esc_html__('Enter email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient. Disabling preserves the configured recipient list and clears the scheduled daily check.', 'cerrojo-security-toolkit') . '</p>';
+        echo '<p><strong>' . \esc_html__('Watched surfaces', 'cerrojo-security-toolkit') . '</strong></p>';
+        foreach (FileIntegrityScanner::SURFACES as $surface) {
+            echo '<label><input type="checkbox" name="surfaces[]" value="' . \esc_attr($surface) . '"' . (in_array($surface, $surfaces, true) ? ' checked' : '') . '> ' . \esc_html($surface) . '</label>';
+        }
+        echo '<p class="description">' . \esc_html__('Only the selected surfaces are enumerated, hashed and compared. A deselected surface is not watched: its changes are not detected until it is selected again. Its stored hashes are kept, so a change made while it was deselected is reported when it is turned back on. At least one surface must stay selected.', 'cerrojo-security-toolkit') . '</p>';
         \submit_button(\esc_html__('Save file change tripwire settings', 'cerrojo-security-toolkit'));
         echo '</fieldset></form>';
 
@@ -498,15 +527,17 @@ final class FileIntegrityAdmin
             'disabled' => \__('File change tripwire alerting was disabled. Configured recipients were preserved and the scheduled daily check was cleared.', 'cerrojo-security-toolkit'),
             'unchanged' => \__('File change tripwire settings were already in the requested state.', 'cerrojo-security-toolkit'),
             'check_recorded' => \__('A new check cycle ran and its outcome is recorded below.', 'cerrojo-security-toolkit'),
-            'baseline_captured' => \__('A new baseline was captured from a fresh scan.', 'cerrojo-security-toolkit'),
+            'baseline_captured' => \__('A new baseline was captured, continuing from the stored rotation cursor.', 'cerrojo-security-toolkit'),
             'baseline_failed' => \__('The baseline could not be stored. No baseline was changed.', 'cerrojo-security-toolkit'),
             'scan_unavailable' => \__('The scan did not return a usable result, so no baseline was written. No change was made.', 'cerrojo-security-toolkit'),
             'acknowledged' => \__('Every listed finding from the last cycle that has a content hash was marked known; the corresponding alert stops until the acknowledgements are cleared. A listed finding without a content hash cannot be acknowledged, because there is no content hash to acknowledge.', 'cerrojo-security-toolkit'),
             'nothing_to_acknowledge' => \__('There are no valid listed findings to acknowledge. No change was made.', 'cerrojo-security-toolkit'),
             'cleared' => \__('All acknowledgements were cleared, forgetting which changes were acknowledged. A file that changes again alerts again; a change that the rolling reference already absorbed is not re-reported.', 'cerrojo-security-toolkit'),
             'invalid_recipients' => \__('Every recipient must be a valid email address. No change was made.', 'cerrojo-security-toolkit'),
+            'surfaces_saved' => \__('The watched surfaces were saved. From the next cycle on, only the selected surfaces are enumerated, hashed and compared.', 'cerrojo-security-toolkit'),
+            'surfaces_required' => \__('Select at least one watched surface. No change was made.', 'cerrojo-security-toolkit'),
             'recipients_required' => \__('Add at least one valid recipient before enabling alerts.', 'cerrojo-security-toolkit'),
-            'write_failed' => \__('WordPress could not save the configuration. The prior state may remain.', 'cerrojo-security-toolkit'),
+            'write_failed' => \__('WordPress did not store every change from this save. Any setting that failed to save keeps its prior value.', 'cerrojo-security-toolkit'),
             'invalid_request' => \__('The request was malformed or did not use POST. No change was made.', 'cerrojo-security-toolkit'),
             'invalid_nonce' => \__('The request could not be verified. No change was made.', 'cerrojo-security-toolkit'),
             'invalid_command' => \__('The requested file integrity command is not supported. No change was made.', 'cerrojo-security-toolkit'),
@@ -518,9 +549,9 @@ final class FileIntegrityAdmin
         }
 
         $severity = match ($notice) {
-            'enabled', 'disabled', 'check_recorded', 'baseline_captured', 'acknowledged', 'cleared' => 'success',
+            'enabled', 'disabled', 'check_recorded', 'baseline_captured', 'acknowledged', 'cleared', 'surfaces_saved' => 'success',
             'unchanged' => 'info',
-            'invalid_recipients', 'recipients_required', 'nothing_to_acknowledge', 'baseline_failed', 'scan_unavailable' => 'warning',
+            'invalid_recipients', 'recipients_required', 'surfaces_required', 'nothing_to_acknowledge', 'baseline_failed', 'scan_unavailable' => 'warning',
             default => 'error',
         };
         echo '<div class="notice notice-' . \esc_attr($severity) . '"><p>' . \esc_html($message) . '</p></div>';

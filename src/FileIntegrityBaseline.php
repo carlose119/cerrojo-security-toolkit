@@ -54,12 +54,19 @@ final class FileIntegrityBaseline
     }
 
     /**
-     * Merge the complete enumeration of this cycle with its hash slice and
-     * persist the rolling manifest. For every enumerated path the stored hash
+     * Merge the selected surfaces' enumeration of this cycle with its hash slice
+     * and persist the rolling manifest. For every enumerated path the stored hash
      * is the one hashed this cycle, else the previous manifest's hash for
      * that path, else null (a watched path whose turn has not come). Paths
      * that left the enumeration are dropped; the manifest is enumeration-
      * driven, so a stale hash entry only affects paths that still exist.
+     *
+     * A deselected surface's entries are what a selection must never erase:
+     * their previous entries are carried into the merged manifest untouched
+     * (hash exactly as stored, including null), so deselecting a surface does
+     * not drop its paths and re-electing it does not report its own paths as
+     * added. They are frozen, though: they are not compared and not refreshed
+     * until the surface is selected again.
      * Returns false (writing nothing) when the clock or the capture timestamp
      * is unusable, when any entry is malformed, or when the option write
      * fails.
@@ -70,9 +77,10 @@ final class FileIntegrityBaseline
      * it and wraps: no watched file stays outside coverage forever.
      *
      * @param array<mixed> $hashes Raw map<string relativePath, string|null sha256> hashed this cycle.
-     * @param list<mixed> $paths the complete, sorted enumerated candidate keys of this cycle.
+     * @param list<mixed> $paths the complete, sorted enumerated candidate keys of this cycle, already narrowed to the selected surfaces.
+     * @param list<string>|null $surfaces the watched-surface selection this capture was scoped to; null keeps the enumeration-driven merge of every earlier caller.
      */
-    public function capture(array $hashes, array $paths, ?string $cursor = null, ?int $now = null): bool
+    public function capture(array $hashes, array $paths, ?string $cursor = null, ?int $now = null, ?array $surfaces = null): bool
     {
         try {
             $clockNow = ($this->clock)();
@@ -87,6 +95,14 @@ final class FileIntegrityBaseline
 
             if ($cursor !== null && ! self::isSafePath($cursor)) {
                 return false;
+            }
+
+            if ($surfaces !== null) {
+                foreach ($surfaces as $surface) {
+                    if (! is_string($surface)) {
+                        return false;
+                    }
+                }
             }
 
             foreach ($hashes as $path => $hash) {
@@ -110,6 +126,23 @@ final class FileIntegrityBaseline
                 }
 
                 $merged[$path] = self::isSha256($previousFiles[$path] ?? null) ? $previousFiles[$path] : null;
+            }
+
+            // Freeze what the selection does not watch: a previous entry whose
+            // surface is outside the selection (or whose surface cannot be read
+            // from its path) is carried into the merged manifest untouched, so
+            // deselecting a surface neither drops nor refreshes its hashes.
+            if ($surfaces !== null) {
+                foreach ($previousFiles as $path => $hash) {
+                    if (array_key_exists($path, $merged)) {
+                        continue;
+                    }
+
+                    $surface = self::surfaceOf((string) $path);
+                    if ($surface === null || ! in_array($surface, $surfaces, true)) {
+                        $merged[$path] = $hash;
+                    }
+                }
             }
 
             $normalized = self::normalize($merged);
@@ -274,6 +307,18 @@ final class FileIntegrityBaseline
             'total' => $total,
             'truncated' => $truncated,
         ];
+    }
+
+    /**
+     * The surface of a watched path: everything before its first `/`. A path
+     * without a separator has no surface; callers treat it as outside every
+     * selection, so it is frozen rather than silently dropped.
+     */
+    public static function surfaceOf(string $path): ?string
+    {
+        $position = strpos($path, '/');
+
+        return $position === false ? null : substr($path, 0, $position);
     }
 
     /**

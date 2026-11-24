@@ -101,7 +101,7 @@ final class SecurityDashboard
             $this->restRouteControlsAdmin->renderCatalog($restRouteControlsNotice);
             $this->restExposurePanel?->renderToolSection();
         } elseif ($tab === 'integrity') {
-            echo '<p class="bastion-tab-introduction">' . \esc_html__('Watch the executable code of plugins, mu-plugins and themes for additions, removals and changes against a stored baseline.', 'cerrojo-security-toolkit') . '</p>';
+            echo '<p class="bastion-tab-introduction">' . \esc_html__('Watch the selected WordPress code surfaces for additions, removals and changes against a stored baseline; the tripwire section below names which surfaces are watched.', 'cerrojo-security-toolkit') . '</p>';
             $this->fileIntegrityAdmin?->renderToolSection($fileIntegrityNotice);
         } else {
             $this->renderOverview();

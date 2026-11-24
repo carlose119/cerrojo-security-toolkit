@@ -707,6 +707,44 @@ final class FileIntegrityBaselineTest extends TestCase
         self::assertSame(['stale' => true], $store->value, 'A failed clear must leave the stored value untouched.');
     }
 
+    public function testCaptureKeepsAnUnselectedSurfacesEntriesByteIdenticalAndMergesTheSelectedOnes(): void
+    {
+        [$baseline, $store] = $this->baseline();
+
+        $store->value = [
+            'schema' => 3,
+            'captured_at' => self::CLOCK,
+            'files' => [
+                'mu-plugins/sentinel.php' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'plugins/hello.php' => str_repeat('c', 64),
+                'themes/twentytwentyfour/functions.php' => 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            ],
+            'total' => 3,
+            'truncated' => false,
+            'cursor' => null,
+        ];
+
+        // Only plugins is selected now: plugins/hello.php left the enumeration and
+        // is dropped, while the two deselected surfaces keep their stored entries
+        // untouched, including the null hash of a path that was never hashed.
+        self::assertTrue($baseline->capture([], ['plugins/replaced.php'], null, self::CLOCK, ['plugins']));
+
+        self::assertSame([
+            'mu-plugins/sentinel.php' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            'plugins/replaced.php' => null,
+            'themes/twentytwentyfour/functions.php' => 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        ], $store->value['files'], 'The previous entries of an unselected surface must stay byte-identical.');
+        self::assertSame(3, $store->value['total'], 'The total keeps describing the manifest, frozen entries included.');
+    }
+
+    public function testCaptureRefusesANonStringSurfaceNameAndWritesNothing(): void
+    {
+        [$baseline, $store] = $this->baseline();
+
+        self::assertFalse($baseline->capture($this->files(), $this->paths(), null, self::CLOCK, ['plugins', 7]));
+        self::assertSame(0, $store->writes);
+    }
+
     /** @return array<string, mixed> */
     private function truncatedPayload(): array
     {

@@ -40,6 +40,7 @@ final class Uninstall
         'bastion_security_wp_file_integrity_alert_result',
         'bastion_security_wp_file_integrity_alerts',
         'bastion_security_wp_file_integrity_baseline',
+        'bastion_security_wp_file_integrity_surfaces',
         'bastion_security_wp_login_protection',
         'bastion_security_wp_login_protection_metrics',
         'bastion_security_wp_plugin_activity_alert_result',

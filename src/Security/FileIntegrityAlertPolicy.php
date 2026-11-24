@@ -6,6 +6,7 @@ namespace BastionSecurityWP\Security;
 
 use BastionSecurityWP\FileIntegrityBaseline;
 use BastionSecurityWP\FileIntegrityDelta;
+use BastionSecurityWP\FileIntegrityScanner;
 use Closure;
 use Throwable;
 
@@ -72,7 +73,7 @@ final class FileIntegrityAlertPolicy
     private Closure $clock;
 
     /**
-     * @param callable(?string $cursor = null): array<string, mixed> $scan one rotation cycle of the scanner; the cursor is the baseline's stored rotation position
+     * @param callable(?string $cursor = null, ?array $surfaces = null): array<string, mixed> $scan one rotation cycle of the scanner; the cursor is the baseline's stored rotation position and the surfaces are the stored watched-surface selection
      */
     public function __construct(
         private readonly FileIntegrityBaseline $baseline,
@@ -109,6 +110,58 @@ final class FileIntegrityAlertPolicy
     public function isEnabled(): bool
     {
         return $this->readConfiguration()['enabled'];
+    }
+
+    /**
+     * The watched-surface selection this policy compares: a subset of
+     * FileIntegrityScanner::SURFACES in canonical order. A stored option that is
+     * absent, unreadable, or keeps no valid surface reads as the default of all
+     * three surfaces, so an unusable value can never silently shrink the watched
+     * set.
+     *
+     * @return list<string>
+     */
+    public function surfaces(): array
+    {
+        try {
+            $stored = ($this->readOption)(FileIntegrityScanner::SURFACES_OPTION_NAME);
+        } catch (Throwable) {
+            return FileIntegrityScanner::SURFACES;
+        }
+
+        return FileIntegrityScanner::normalizeSurfaces($stored) ?? FileIntegrityScanner::SURFACES;
+    }
+
+    /**
+     * Replace the watched-surface selection. Unknown names are dropped; a save
+     * with no remaining valid surface is refused before anything is written,
+     * because at least one surface must stay selected. The accepted selection is
+     * stored as the canonical ordered subset of SURFACES.
+     *
+     * @return string surfaces_saved|unchanged|surfaces_required|write_failed
+     */
+    public function setSurfaces(mixed $raw): string
+    {
+        $parsed = FileIntegrityScanner::normalizeSurfaces($raw);
+        if ($parsed === null) {
+            return 'surfaces_required';
+        }
+
+        if ($this->surfaces() === $parsed) {
+            return 'unchanged';
+        }
+
+        try {
+            if ((bool) ($this->writeOption)(FileIntegrityScanner::SURFACES_OPTION_NAME, $parsed)) {
+                return 'surfaces_saved';
+            }
+
+            // update_option() answers false when the stored value is already
+            // identical, which is the state this write asked for.
+            return $this->surfaces() === $parsed ? 'surfaces_saved' : 'write_failed';
+        } catch (Throwable) {
+            return 'write_failed';
+        }
     }
 
     /** Whether this exact path and hash pair was already reported or acknowledged. */
@@ -212,11 +265,12 @@ final class FileIntegrityAlertPolicy
 
     /**
      * One independent cycle: read the stored baseline, scan the next rotation
-     * slice (starting after the baseline's stored cursor), then either seed the
-     * baseline when there is none, or compare the complete enumerated path set
-     * against it and report the changes that are not known yet. The merged
+     * slice of the selected surfaces (starting after the baseline's stored
+     * cursor), then either seed the baseline when there is none, or compare the
+     * complete enumerated path set against the previous entries of the selected
+     * surfaces and report the changes that are not known yet. The merged
      * manifest is stored after the delta is computed, with this cycle's
-     * rotation cursor.
+     * rotation cursor; entries of deselected surfaces are frozen in place.
      *
      * The returned array is exactly what gets stored, so the panel shows the
      * cycle's own outcome instead of a recomputation.
@@ -230,6 +284,8 @@ final class FileIntegrityAlertPolicy
             $at = 0;
         }
 
+        $surfaces = $this->surfaces();
+
         try {
             $previous = $this->baseline->read();
         } catch (Throwable) {
@@ -237,7 +293,7 @@ final class FileIntegrityAlertPolicy
         }
 
         try {
-            $scan = ($this->scan)(is_string($previous['cursor'] ?? null) ? $previous['cursor'] : null);
+            $scan = ($this->scan)(is_string($previous['cursor'] ?? null) ? $previous['cursor'] : null, $surfaces);
         } catch (Throwable) {
             $scan = null;
         }
@@ -269,11 +325,32 @@ final class FileIntegrityAlertPolicy
             return $this->record($refused);
         }
 
+        // The comparison only sees the previous entries of the selected surfaces;
+        // entries of deselected surfaces are frozen in the manifest and are never
+        // reported removed while their surface is not watched.
+        $previousFiles = [];
+        $frozenPaths = 0;
+        if (is_array($previous)) {
+            foreach ($previous['files'] as $path => $hash) {
+                if (! is_string($path)) {
+                    continue;
+                }
+
+                $surface = FileIntegrityBaseline::surfaceOf($path);
+                if ($surface !== null && in_array($surface, $surfaces, true)) {
+                    $previousFiles[$path] = $hash;
+                    continue;
+                }
+
+                ++$frozenPaths;
+            }
+        }
+
         // An empty enumerated set against a stored manifest would be read as a
         // total removal, and the roll that follows the comparison would wipe the
         // stored baseline. Refuse it exactly like a missing path set. A first
         // run with an empty enumeration has no manifest to wipe and seeds it.
-        if ($enumeratedPaths === [] && is_array($previous) && count($previous['files']) > 0) {
+        if ($enumeratedPaths === [] && count($previousFiles) > 0) {
             $refused = self::emptyResult('scan_unavailable', $at);
             $refused['unreadable'] = count(self::listOf($scan['unreadable'] ?? []));
             $refused['skipped'] = count(self::listOf($scan['skipped'] ?? []));
@@ -281,8 +358,13 @@ final class FileIntegrityAlertPolicy
             return $this->record($refused);
         }
 
+        // The stored manifest this cycle will write is the selected surfaces'
+        // enumeration plus the frozen entries of the ones it does not watch, so
+        // the footprint guard has to be judged on that total, not on the
+        // enumeration alone: otherwise a manifest cut by the guard is reported
+        // as complete coverage.
         $coverage = [
-            'truncated' => count($enumeratedPaths) > FileIntegrityBaseline::MAX_PATHS,
+            'truncated' => count($enumeratedPaths) + $frozenPaths > FileIntegrityBaseline::MAX_PATHS,
             'unreadable' => self::listOf($scan['unreadable'] ?? []),
             'skipped' => self::listOf($scan['skipped'] ?? []),
         ];
@@ -298,7 +380,7 @@ final class FileIntegrityAlertPolicy
         if ($previous === null) {
             // Seeding stores the complete enumeration (null hashes until a path's
             // turn), so the next cycles roll the manifest forward.
-            $seeded = $this->baseline->capture((array) $scan['files'], $enumeratedPaths, self::cursorOf($scan), $at > 0 ? $at : null);
+            $seeded = $this->baseline->capture((array) $scan['files'], $enumeratedPaths, self::cursorOf($scan), $at > 0 ? $at : null, $surfaces);
             $manifest = $seeded ? $this->baseline->read() : null;
 
             $result = self::emptyResult($seeded ? 'baseline_created' : 'baseline_unavailable', $at);
@@ -311,7 +393,7 @@ final class FileIntegrityAlertPolicy
             return $this->record($result);
         }
 
-        $delta = FileIntegrityDelta::compare($previous['files'], (array) $scan['files'], $enumeratedPaths);
+        $delta = FileIntegrityDelta::compare($previousFiles, (array) $scan['files'], $enumeratedPaths);
         $movements = self::flatten($delta);
         $config = $this->readConfiguration();
 
@@ -335,7 +417,7 @@ final class FileIntegrityAlertPolicy
             if ($config['recipients'] === []) {
                 $status = 'no_recipients';
             } else {
-                $delivered = $this->send($config['recipients'], $fresh, $delta, $coverage, $at);
+                $delivered = $this->send($config['recipients'], $fresh, $delta, $coverage, $at, $surfaces);
                 $status = $delivered ? 'checked' : 'mail_failed';
                 $notified = $delivered ? count($fresh) : 0;
             }
@@ -367,7 +449,7 @@ final class FileIntegrityAlertPolicy
         // cycle rolls, including one with alerting disabled, where there is no
         // alert to retry and withholding the roll would freeze the rotation.
         if ($status !== 'mail_failed' && $status !== 'no_recipients') {
-            $this->baseline->capture((array) $scan['files'], $enumeratedPaths, self::cursorOf($scan), $at > 0 ? $at : null);
+            $this->baseline->capture((array) $scan['files'], $enumeratedPaths, self::cursorOf($scan), $at > 0 ? $at : null, $surfaces);
         }
 
         $result = [
@@ -480,7 +562,7 @@ final class FileIntegrityAlertPolicy
      * @param array{added: array<string, string>, removed: array<string, string>, changed: array<string, array{from: string, to: string}>} $delta
      * @param array{truncated: bool, unreadable: list<string>, skipped: list<string>} $coverage
      */
-    private function send(array $recipients, array $fresh, array $delta, array $coverage, int $at): bool
+    private function send(array $recipients, array $fresh, array $delta, array $coverage, int $at, array $surfaces): bool
     {
         $subject = sprintf(
             'Cerrojo: %d watched code %s changed',
@@ -489,7 +571,7 @@ final class FileIntegrityAlertPolicy
         );
 
         $lines = [
-            'Cerrojo compared the watched code files (plugins, mu-plugins, themes) with the stored baseline.',
+            sprintf('Cerrojo compared the watched code files (%s) with the stored baseline.', implode(', ', $surfaces)),
             '',
             sprintf('Added: %d', count($delta['added'])),
             sprintf('Changed: %d', count($delta['changed'])),
