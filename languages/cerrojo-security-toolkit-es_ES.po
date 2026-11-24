@@ -115,9 +115,9 @@ msgstr "Alertado sobre"
 msgid "Alerting is enabled, but no valid recipient is configured, so the cycle could not send any alert."
 msgstr "Las alertas están activadas, pero no hay ningún destinatario válido configurado, así que el ciclo no pudo enviar ninguna alerta."
 
-#: src/Admin/FileIntegrityAdmin.php:450
-msgid "All acknowledgements were cleared, so every current change alerts again."
-msgstr "Se eliminaron todos los reconocimientos, así que cada cambio actual vuelve a alertar."
+#: src/Admin/FileIntegrityAdmin.php:506
+msgid "All acknowledgements were cleared, forgetting which changes were acknowledged. A file that changes again alerts again; a change that the rolling reference already absorbed is not re-reported."
+msgstr "Se eliminaron todos los reconocimientos, olvidando qué cambios fueron reconocidos. Un archivo que cambia de nuevo vuelve a generar una alerta; un cambio que la referencia rotatoria ya absorbió no se vuelve a informar."
 
 #: src/Admin/SecurityHeadersAdmin.php:210
 msgid "Baseline"
@@ -179,9 +179,9 @@ msgstr "Capturado:"
 msgid "Capturing replaces any stored baseline with the current surface. Clearing removes the stored baseline. Only the baseline option is written or deleted; no route, callback, or permission value is stored or executed."
 msgstr "Capturar reemplaza cualquier línea base almacenada por la superficie actual. Eliminar borra la línea base almacenada. Solo se escribe o se borra la opción de la línea base; no se almacena ni se ejecuta ningún valor de rutas, callbacks o permisos."
 
-#: src/Admin/FileIntegrityAdmin.php:414
-msgid "Capturing replaces the stored baseline with a fresh scan, so finding reports against the replaced baseline stop. Capture deliberately, for example after you reviewed and accepted the current files."
-msgstr "Capturar reemplaza la línea base almacenada por un análisis nuevo, así que los reportes de hallazgos contra la línea base reemplazada se detienen. Captura deliberadamente, por ejemplo después de haber revisado y aceptado los archivos actuales."
+#: src/Admin/FileIntegrityAdmin.php:466
+msgid "Capturing replaces the stored baseline with the current enumeration and the next rotation slice of hashes, continuing where the last cycle's hashing stopped: the other watched paths are carried forward without re-hashing, so the baseline is not a freshly verified copy of every watched file. Finding reports against the replaced baseline stop. Capture deliberately, for example after you reviewed and accepted the current files."
+msgstr "Capturar reemplaza la línea base almacenada por la enumeración actual y el siguiente bloque rotativo de hashes, continuando donde se detuvo el hashing del último ciclo: las demás rutas vigiladas se mantienen sin recalcular su hash, de modo que la línea base no es una copia recién verificada de todos los archivos vigilados. Los reportes de hallazgos contra la línea base reemplazada se detienen. Captura deliberadamente, por ejemplo después de haber revisado y aceptado los archivos actuales."
 
 #: src/Admin/SecurityDashboard.php:83
 msgid "Cerrojo Security Toolkit"
@@ -247,9 +247,9 @@ msgstr "Elimina todos los Controles de Rutas REST"
 msgid "Clear all saved REST route rules without loading the catalog. Deactivation also stops enforcement but preserves the option."
 msgstr "Elimina todas las reglas de rutas REST guardadas sin cargar el catálogo. La desactivación también detiene la aplicación de las reglas pero conserva la opción."
 
-#: src/Admin/FileIntegrityAdmin.php:426
-msgid "Clears every acknowledgement, so every current change alerts again on the next cycle."
-msgstr "Elimina todos los reconocimientos, de modo que cada cambio actual vuelva a generar una alerta en el siguiente ciclo."
+#: src/Admin/FileIntegrityAdmin.php:477
+msgid "Clears every acknowledgement, forgetting which changes were acknowledged. A file that changes again alerts again; a change that the rolling reference already absorbed is not re-reported."
+msgstr "Elimina todos los reconocimientos, olvidando qué cambios fueron reconocidos. Un archivo que cambia de nuevo vuelve a generar una alerta; un cambio que la referencia rotatoria ya absorbió no se vuelve a informar."
 
 #: src/Admin/FileIntegrityAdmin.php:391
 msgid "Commands"
@@ -491,9 +491,9 @@ msgstr "Introduce direcciones de correo separadas por comas o saltos de línea. 
 msgid "Enter up to 50 recipients as email addresses separated by commas or new lines. Every address must be valid. Enabling requires at least one recipient."
 msgstr "Introduce hasta 50 destinatarios como direcciones de correo separadas por comas o saltos de línea. Cada dirección debe ser válida. La activación requiere al menos un destinatario."
 
-#: src/Admin/FileIntegrityAdmin.php:448
-msgid "Every listed finding from the last cycle was marked known; the corresponding alert stops until the acknowledgements are cleared."
-msgstr "Todos los hallazgos listados del último ciclo fueron marcados como conocidos; la alerta correspondiente se detiene hasta que se eliminen los reconocimientos."
+#: src/Admin/FileIntegrityAdmin.php:504
+msgid "Every listed finding from the last cycle that has a content hash was marked known; the corresponding alert stops until the acknowledgements are cleared. A listed finding without a content hash cannot be acknowledged, because there is no content hash to acknowledge."
+msgstr "Todos los hallazgos listados del último ciclo que tienen un hash de contenido fueron marcados como conocidos; la alerta correspondiente se detiene hasta que se eliminen los reconocimientos. Un hallazgo listado sin hash de contenido no puede reconocerse, porque no hay un hash de contenido que reconocer."
 
 #: src/Admin/AdministratorAccountAlertAdmin.php:145 src/Admin/CriticalSettingsAlertAdmin.php:152 src/Admin/FileIntegrityAdmin.php:451 src/Admin/PluginActivityAlertAdmin.php:143
 msgid "Every recipient must be a valid email address. No change was made."
@@ -563,9 +563,9 @@ msgstr "Endurecimiento"
 msgid "Hashing pass: this cycle hashed %1$d of %2$d watched files and completed a full pass."
 msgstr "Recorrido de hashing: este ciclo calculó el hash de %1$d de %2$d archivos vigilados y completó un recorrido completo."
 
-#: src/Admin/FileIntegrityAdmin.php:339
-msgid "Hashing pass: this cycle hashed %1$d of %2$d watched files; %3$d remain before every watched file has had a turn. Paths that appear or vanish are reported on the cycle they change, but a watched file's content change is detected at that file's next turn, not immediately."
-msgstr "Recorrido de hashing: este ciclo calculó el hash de %1$d de %2$d archivos vigilados; quedan %3$d antes de que todos los archivos vigilados hayan tenido su turno. Las rutas que aparecen o desaparecen se informan en el ciclo en que cambian, pero un cambio de contenido en un archivo vigilado se detecta en el próximo turno de ese archivo, no de inmediato."
+#: src/Admin/FileIntegrityAdmin.php:340
+msgid "Hashing pass: this cycle hashed %1$d of %2$d watched files; %3$d remain before every watched file has had a turn. Paths that appear or vanish are reported on the cycle they change. A watched file's content change is detected when that file's turn comes and the stored baseline already holds its content hash; the turn that records a file's first hash only records it, and comparisons for that file start from the following turn."
+msgstr "Recorrido de hashing: este ciclo calculó el hash de %1$d de %2$d archivos vigilados; quedan %3$d antes de que todos los archivos vigilados hayan tenido su turno. Las rutas que aparecen o desaparecen se informan en el ciclo en que cambian. Un cambio de contenido en un archivo vigilado se detecta cuando llega el turno de ese archivo y la línea base almacenada ya contiene su hash de contenido; el turno que registra el primer hash de un archivo solo lo registra, y las comparaciones de ese archivo comienzan a partir del turno siguiente."
 
 #: src/Admin/SecurityHeadersAdmin.php:172
 msgid "High-impact policies can break embedding, browser features, resources, transport, or"
@@ -1327,9 +1327,13 @@ msgstr ". Valida todos los flujos de incrustación previstos."
 msgid "isolation"
 msgstr "aislamiento"
 
-#: src/Admin/FileIntegrityAdmin.php:412
-msgid "its content has not been hashed yet; it is compared at that file's next turn."
-msgstr "su contenido todavía no tiene hash; se compara en el próximo turno de ese archivo."
+#: src/Admin/FileIntegrityAdmin.php:418
+msgid "its content has not been hashed yet; it is recorded at that file's first turn and compared from the turn after that."
+msgstr "su contenido todavía no tiene hash; se registra en el primer turno de ese archivo y se compara a partir del turno siguiente a ese."
+
+#: src/Admin/FileIntegrityAdmin.php:417
+msgid "its content was never hashed, so this reports that the path left the watched set, not that its content changed."
+msgstr "su contenido nunca tuvo hash, de modo que esto informa que la ruta salió del conjunto vigilado, no que su contenido cambiara."
 
 #: src/Admin/LoginProtectionAdmin.php:173
 msgid "last:"

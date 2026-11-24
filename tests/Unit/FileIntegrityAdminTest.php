@@ -425,7 +425,8 @@ namespace BastionSecurityWP\Tests\Unit {
 
             self::assertStringContainsString('hashed 1 of 3 watched files', $decoded);
             self::assertStringContainsString('2 remain', $decoded);
-            self::assertStringContainsString("detected at that file's next turn", $decoded, 'A partial pass must state that content changes wait for their turn.');
+            self::assertStringContainsString("detected when that file's turn comes and the stored baseline already holds its content hash", $decoded, 'A partial pass must state that content changes are seen at a turn of that file.');
+            self::assertStringContainsString('comparisons for that file start from the following turn', $decoded, "A partial pass must state that the recording turn does not yet compare; the detection wait is one turn longer for a file whose hash was never recorded." );
         }
 
         public function testACompletedPassDoesNotCarryTheAgingCaveat(): void
@@ -449,7 +450,7 @@ namespace BastionSecurityWP\Tests\Unit {
             $decoded = html_entity_decode((string) ob_get_clean());
 
             self::assertStringContainsString('completed a full pass', $decoded);
-            self::assertStringNotContainsString("detected at that file's next turn", $decoded);
+            self::assertStringNotContainsString('comparisons for that file start from the following turn', $decoded);
         }
 
         public function testAnAddedPathWithoutAHashIsSaidToBePendingNotAcknowledged(): void

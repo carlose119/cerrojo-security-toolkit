@@ -202,14 +202,14 @@ What it watches and reports:
 
 - Watched surfaces are the PHP files (including `phtml`, `php5`, `php7`, `php8`, and `inc`) under `wp-content/plugins`, `wp-content/mu-plugins`, and `wp-content/themes`. `uploads/`, WordPress core files, and other content are never watched.
 - **Run a check now** performs one bounded capture and compares it with the stored baseline, reporting files **added**, **changed**, or **removed** since that baseline. If no baseline exists, the first cycle creates one from the current scan and alerts nobody.
-- **Capture a new baseline** replaces the stored baseline with a fresh scan; finding reports against the replaced baseline stop, so capture deliberately, for example after reviewing and accepting the current files.
-- One alert is attempted per change until that exact change (identified by path and its current hash) is acknowledged. **Acknowledge reported changes** marks every finding listed for the last cycle as known; **Forget acknowledgements** clears them so every current change alerts again. Acknowledging states that you reviewed a change and consider it expected; it is not a statement that the file is safe.
+- **Capture a new baseline** replaces the stored baseline with the current enumeration and the next rotation slice of hashes: it continues where the last cycle's hashing stopped and carries the other watched paths forward without re-hashing them, so it does not freshly verify every watched file. Finding reports against the replaced baseline stop, so capture deliberately, for example after reviewing and accepting the current files.
+- One alert is attempted per change until that exact change (identified by path and its current hash) is acknowledged. **Acknowledge reported changes** marks every listed finding that has a content hash as known; a listed finding without a content hash cannot be acknowledged. **Forget acknowledgements** clears them, forgetting which changes were acknowledged: a file that changes again alerts again, and a change that the rolling reference already absorbed is not re-reported. Acknowledging states that you reviewed a change and consider it expected; it is not a statement that the file is safe.
 
 Honest limits:
 
 - This is a tripwire, not an integrity guarantee. A change is not proof of a compromise, and a report with no findings is not proof that the site is clean.
 - Cerrojo never writes, moves, deletes, quarantines, or repairs a watched file and never uploads content.
-- The scan is bounded (both files per capture and per-file size), so a large site can be covered partially. The panel states when coverage was incomplete, and a file whose contents Cerrojo could not read is reported as unverifiable, never as matching the baseline.
+- Every cycle enumerates all watched paths, so a file that appears or leaves the watched set is reported in the cycle it changes. Content hashing rotates with a cursor: each cycle hashes a bounded slice (also bounded per file), continuing where the previous cycle stopped, so a content change is detected when that file's turn comes. A file's first turn only records its hash, and comparisons for that file start from the turn after it. The stored manifest keeps up to 10000 paths; beyond that, coverage is bounded and the panel says so. The panel states when coverage was incomplete, and a file whose contents Cerrojo could not read is reported as unverifiable, never as matching the baseline.
 - Delivery depends on the site's mail transport. An accepted message is not proven delivery, and a failed send stays unacknowledged and is retried on the next cycle.
 - The panel shows the outcome of the cycle that Cerrojo stored. Nothing else that changed on the site outside the three watched surfaces is covered by this tool.
 
@@ -295,7 +295,7 @@ Compatibility is a validation target, not a claim that unsupported upstream comb
 
 Cerrojo ships a neutral Spanish (`es_ES`) catalogue in `languages/`: `cerrojo-security-toolkit-es_ES.po` with its compiled `cerrojo-security-toolkit-es_ES.mo`, loaded on `init` from the plugin's own directory. A site whose locale is `es_ES` reads the bundled catalogue; for any other Spanish locale, a translation served by WordPress.org takes precedence when one exists, so the bundled file is a fallback, never an override.
 
-The template comes from the source, not from a hand-maintained list:
+The template comes from the source, not from a hand-maintained list. After changing a panel string, regenerate the template and recompile the catalogue:
 
 ```shell
 php tools/make-pot.php

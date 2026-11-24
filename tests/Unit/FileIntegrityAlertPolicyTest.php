@@ -624,7 +624,6 @@ final class FileIntegrityAlertPolicyTest extends TestCase
         $mails = [];
         $policy = $this->policy([], true, $mails, ['plugins/a.php' => self::HASH_A]);
         $before = $this->storedBaseline();
-
         $result = $policy->check();
 
         self::assertSame('scan_unavailable', $result['status'], 'An empty enumeration against a stored manifest cannot be a total removal.');
@@ -637,6 +636,32 @@ final class FileIntegrityAlertPolicyTest extends TestCase
         self::assertSame('baseline_created', $seeding->check()['status']);
     }
 
+    public function testTheEmptyEnumerationRefusalReportsTheCountsTheRefusedScanCarried(): void
+    {
+        $mails = [];
+        $policy = $this->policy(
+            [],
+            true,
+            $mails,
+            ['plugins/a.php' => self::HASH_A],
+            ['unreadable' => ['plugins/locked.php', 'plugins/maybe.php'], 'skipped' => ['plugins/huge.php']],
+        );
+
+        $result = $policy->check();
+
+        self::assertSame('scan_unavailable', $result['status']);
+        self::assertSame(2, $result['unreadable'], 'The refused capture\'s counts must be reported, exactly like the sibling missing-`paths` refusal.');
+        self::assertSame(1, $result['skipped']);
+        self::assertSame(0, $result['removed'], 'The refused evidence must never be read as removals.');
+        self::assertSame([], $mails, 'A refused cycle must never alert.');
+    }
+
+    /**
+     * @param array<string, string> $scanFiles
+     * @param list<array{to: mixed, subject: string, message: string}> $mails
+     * @param array<string, string>|null $baselineFiles
+     * @param array<string, mixed> $scanExtra
+     */
     private function policy(
         array $scanFiles,
         bool $enabled,

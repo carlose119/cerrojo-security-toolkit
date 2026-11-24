@@ -304,8 +304,9 @@ final class FileIntegrityAdmin
     /**
      * State the rotation schedule of the last cycle: how much of the watched set
      * was hashed, how much is left before a full pass, and the honest limit that
-     * a content change is detected at that file's next turn. A cycle with no
-     * comparison has no schedule to state.
+     * a content change is compared only at a turn whose baseline already holds
+     * the file's stored content hash, since the first turn only records it. A
+     * cycle with no comparison has no schedule to state.
      *
      * @param array<string, mixed> $result
      */
@@ -336,7 +337,7 @@ final class FileIntegrityAdmin
             return;
         }
 
-        echo '<p>' . \esc_html(\sprintf(\__('Hashing pass: this cycle hashed %1$d of %2$d watched files; %3$d remain before every watched file has had a turn. Paths that appear or vanish are reported on the cycle they change, but a watched file\'s content change is detected at that file\'s next turn, not immediately.', 'cerrojo-security-toolkit'), $hashed, $watched, $remaining)) . '</p>';
+        echo '<p>' . \esc_html(\sprintf(\__('Hashing pass: this cycle hashed %1$d of %2$d watched files; %3$d remain before every watched file has had a turn. Paths that appear or vanish are reported on the cycle they change. A watched file\'s content change is detected when that file\'s turn comes and the stored baseline already holds its content hash; the turn that records a file\'s first hash only records it, and comparisons for that file start from the following turn.', 'cerrojo-security-toolkit'), $hashed, $watched, $remaining)) . '</p>';
     }
 
     /**
@@ -462,7 +463,7 @@ final class FileIntegrityAdmin
         $this->hiddenFields('baseline');
         \submit_button(\esc_html__('Capture a new baseline', 'cerrojo-security-toolkit'), 'secondary');
         echo '</form>';
-        echo '<p>' . \esc_html__('Capturing replaces the stored baseline with a fresh scan, so finding reports against the replaced baseline stop. Capture deliberately, for example after you reviewed and accepted the current files.', 'cerrojo-security-toolkit') . '</p>';
+        echo '<p>' . \esc_html__('Capturing replaces the stored baseline with the current enumeration and the next rotation slice of hashes, continuing where the last cycle\'s hashing stopped: the other watched paths are carried forward without re-hashing, so the baseline is not a freshly verified copy of every watched file. Finding reports against the replaced baseline stop. Capture deliberately, for example after you reviewed and accepted the current files.', 'cerrojo-security-toolkit') . '</p>';
 
         echo '<form method="post" action="' . $action . '">';
         $this->hiddenFields('acknowledge');
@@ -500,7 +501,7 @@ final class FileIntegrityAdmin
             'baseline_captured' => \__('A new baseline was captured from a fresh scan.', 'cerrojo-security-toolkit'),
             'baseline_failed' => \__('The baseline could not be stored. No baseline was changed.', 'cerrojo-security-toolkit'),
             'scan_unavailable' => \__('The scan did not return a usable result, so no baseline was written. No change was made.', 'cerrojo-security-toolkit'),
-            'acknowledged' => \__('Every listed finding from the last cycle was marked known; the corresponding alert stops until the acknowledgements are cleared.', 'cerrojo-security-toolkit'),
+            'acknowledged' => \__('Every listed finding from the last cycle that has a content hash was marked known; the corresponding alert stops until the acknowledgements are cleared. A listed finding without a content hash cannot be acknowledged, because there is no content hash to acknowledge.', 'cerrojo-security-toolkit'),
             'nothing_to_acknowledge' => \__('There are no valid listed findings to acknowledge. No change was made.', 'cerrojo-security-toolkit'),
             'cleared' => \__('All acknowledgements were cleared, forgetting which changes were acknowledged. A file that changes again alerts again; a change that the rolling reference already absorbed is not re-reported.', 'cerrojo-security-toolkit'),
             'invalid_recipients' => \__('Every recipient must be a valid email address. No change was made.', 'cerrojo-security-toolkit'),

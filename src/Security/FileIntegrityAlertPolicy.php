@@ -274,7 +274,11 @@ final class FileIntegrityAlertPolicy
         // stored baseline. Refuse it exactly like a missing path set. A first
         // run with an empty enumeration has no manifest to wipe and seeds it.
         if ($enumeratedPaths === [] && is_array($previous) && count($previous['files']) > 0) {
-            return $this->record(self::emptyResult('scan_unavailable', $at));
+            $refused = self::emptyResult('scan_unavailable', $at);
+            $refused['unreadable'] = count(self::listOf($scan['unreadable'] ?? []));
+            $refused['skipped'] = count(self::listOf($scan['skipped'] ?? []));
+
+            return $this->record($refused);
         }
 
         $coverage = [
