@@ -59,3 +59,20 @@ Risk: item 1 pending assessment — the feature stores a baseline derived from f
 - L14 (evidence, native review): the review of the scanner slice (base `bfb3ad2`, HEAD `d7eb4a9`, lenses risk and resilience plus a refuter) ran 10 minutes and produced one CRITICAL, `R4-empty-scan-reports-mass-removal`: a Throwable while walking one surface aborted the whole capture and the scan-wide catch returned an all-empty result identical to "no watched files", so the policy reported every known file as removed with coverage "complete". Both the parent and the independent verifier had read that catch and missed the interaction with the delta.
 - L15 (correction, parent): per-surface guards, a `failed_surfaces` list and a policy that refuses to compare or alert when any surface failed, with `scan_unavailable` as the recorded status. 96 diff lines against the 200-line correction budget. No new user-facing string, so the Spanish catalogue stays complete. Suite after the fix: 497 tests / 7,220 assertions, syntax clean over 93 files.
 - L16 (incident, parent): the correction was first left uncommitted on a detached HEAD, so the provider reported `corrected_candidate_unavailable` and closed the lineage at `correction_required` with the plan accepted but the candidate no longer matching the frozen target. Lesson: a correction must be committed into the candidate before it is declared, never left floating.
+
+## Next design: batched coverage instead of a truncation bound
+
+The delivered tripwire hashes at most MAX_FILES entries and reports the rest as truncated. Because the cut is alphabetical, the same files are compared forever and later surfaces such as `themes/` are never watched. Raising the bound only moves the cliff, and raising it far enough to cover a real site (~4,500 candidates on the site that reported this) makes one cycle cost several seconds with no upper bound on bytes.
+
+The user's decision replaces the bound with rotation, so no file stays outside coverage permanently:
+
+- **Every cycle enumerates all candidates** under the three surfaces. That walk is cheap, it needs no hashing, and it makes the path-level comparison complete on every cycle: a file that appeared or vanished is reported immediately, never at an arbitrary turn.
+- **Content hashing rotates.** One cycle hashes a bounded slice of the candidate list, continuing after the cursor stored in the baseline and wrapping at the end. Bytes remain the budget, not file count, so a cycle's cost is bounded on a slow disk.
+- **The baseline becomes a rolling manifest.** Hashes for the visited slice are refreshed in place; the cursor advances by the slice size. A file's stored hash therefore ages until its next turn, and a complete pass over the site takes several cycles.
+- **The panel must say all of it**: how many files were hashed this cycle, how many remain until a full pass, and that a content change is detected at that file's next turn, not immediately. Path additions and removals are immediate; only content changes rotate. That distinction is the honest limit of this design and the one a reader could most easily misread.
+- Cost: a baseline schema bump for the cursor, per-surface progress in the result, and new panel strings that need translating.
+
+Why this is worth doing: a tripwire that silently never looks at `themes/` is worse than one that says "I compared 1,800 of 4,513 files this cycle and I am 2 cycles away from a full pass". The first is a false guarantee; the second is a schedule.
+
+- L17 (verbatim, user): "tambien se podria hacer por lote, de manera que no quede ningun archivo por fuera" — replace the truncation bound with batched rotation.
+- L18 (decision, parent): the approach chosen is rotation over a complete per-cycle enumeration, not a larger bound: path additions and removals stay immediate and complete, content hashing rotates with a cursor, and the panel states the pass progress and the aging limit.
