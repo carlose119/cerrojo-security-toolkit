@@ -269,6 +269,33 @@ namespace BastionSecurityWP\Tests\Unit {
             self::assertFalse($harness['policy']->isKnown('plugins/a.php', self::HASH_B));
             self::assertSame(0, $harness['policy']->state()['known']);
             self::assertStringContainsString('cleared', $harness['redirects'][0]);
+
+            ob_start();
+            $harness['admin']->renderToolSection('cleared');
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertSame(2, substr_count($decoded, 'forgetting which changes were acknowledged'), 'The button help and the confirmation promise the same thing.');
+            self::assertSame(2, substr_count($decoded, 'A file that changes again alerts again'), 'Both strings state what does alert again.');
+            self::assertSame(2, substr_count($decoded, 'a change that the rolling reference already absorbed is not re-reported'), 'Both strings state what does not re-report.');
+            self::assertStringNotContainsString('every current change alerts again', $decoded, 'The removed over-promise must be gone from the panel.');
+        }
+
+        public function testARemovalOfANeverHashedPathIsStatedHonestly(): void
+        {
+            $harness = $this->admin(
+                baselineFiles: ['plugins/gone.php' => null, 'plugins/keep.php' => self::HASH_A],
+                scanFiles: ['plugins/keep.php' => self::HASH_A],
+                scanExtra: ['paths' => ['plugins/keep.php'], 'total' => 1, 'hashed' => 1, 'remaining' => 0, 'pass_complete' => true],
+            );
+            $harness['policy']->check();
+
+            ob_start();
+            $harness['admin']->renderToolSection();
+            $decoded = html_entity_decode((string) ob_get_clean());
+
+            self::assertStringContainsString('plugins/gone.php', $decoded);
+            self::assertStringContainsString('its content was never hashed', $decoded, 'A removal with no hash must not borrow the pending-hash sentence.');
+            self::assertStringNotContainsString('it is recorded at that file', $decoded, 'Nothing will be recorded for a path that left the watched set.');
         }
 
         public function testRenderingNeverScansAndWritesNoOption(): void
@@ -446,6 +473,8 @@ namespace BastionSecurityWP\Tests\Unit {
 
             self::assertStringContainsString('plugins/new.php', $decoded);
             self::assertStringContainsString('has not been hashed yet', $decoded);
+            self::assertStringContainsString("recorded at that file's first turn", $decoded, 'The pending state states when the content is recorded and when it is first compared.');
+            self::assertStringNotContainsString("compared at that file's next turn", $decoded, 'The pass-progress sentence says detected, not compared; the old false promise must be gone.');
             self::assertStringNotContainsString('it alerts again on the next cycle until it is acknowledged', $decoded);
         }
 

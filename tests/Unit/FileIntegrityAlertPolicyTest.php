@@ -569,6 +569,74 @@ final class FileIntegrityAlertPolicyTest extends TestCase
         self::assertNotNull($policy->lastResult(), 'A listed addition with no hash yet must still read back from storage.');
     }
 
+    public function testARemovalOfAPathThatWasNeverHashedIsReportedAndStillReadsBack(): void
+    {
+        $store = &$this->store;
+        // Cycle 1 seeds a null-hash path; cycle 2's enumeration no longer names it.
+        $scan = static function () use (&$store): array {
+            $seeded = isset($store[FileIntegrityBaseline::OPTION_NAME]);
+
+            return [
+                'files' => ['plugins/a.php' => self::HASH_A],
+                'paths' => $seeded ? ['plugins/a.php'] : ['plugins/a.php', 'plugins/new.php'],
+                'hashed' => 1,
+                'remaining' => $seeded ? 0 : 1,
+                'pass_complete' => $seeded,
+            ];
+        };
+        $baseline = new FileIntegrityBaseline(
+            readOption: static function () use (&$store): mixed {
+                return $store[FileIntegrityBaseline::OPTION_NAME] ?? null;
+            },
+            writeOption: static function (array $value) use (&$store): bool {
+                $store[FileIntegrityBaseline::OPTION_NAME] = $value;
+                return true;
+            },
+            deleteOption: static fn (): bool => true,
+            clock: static fn (): int => 1_700_000_100,
+        );
+        $policy = new FileIntegrityAlertPolicy(
+            $baseline,
+            $scan,
+            readOption: static function (string $name) use (&$store): mixed {
+                return $store[$name] ?? null;
+            },
+            writeOption: static function (string $name, array $value) use (&$store): bool {
+                $store[$name] = $value;
+                return true;
+            },
+            mail: static fn (array $to, string $subject, string $message): bool => true,
+            clock: static fn (): int => 1_700_000_200,
+        );
+
+        $seed = $policy->check();
+        self::assertSame('baseline_created', $seed['status']);
+        self::assertSame(['plugins/a.php' => self::HASH_A, 'plugins/new.php' => null], $this->storedBaseline()['files']);
+
+        $result = $policy->check();
+        self::assertSame(1, $result['removed'], 'A path watched with a null hash must still be reported as removed.');
+        self::assertSame(['path' => 'plugins/new.php', 'change' => 'removed', 'hash' => ''], $result['findings'][0]);
+        self::assertNotNull($policy->lastResult(), 'A removal without a hash must still read back from storage.');
+    }
+
+    public function testAnEmptyEnumerationAgainstAStoredManifestIsRefusedAndTheCaptureIsKept(): void
+    {
+        $mails = [];
+        $policy = $this->policy([], true, $mails, ['plugins/a.php' => self::HASH_A]);
+        $before = $this->storedBaseline();
+
+        $result = $policy->check();
+
+        self::assertSame('scan_unavailable', $result['status'], 'An empty enumeration against a stored manifest cannot be a total removal.');
+        self::assertSame($before, $this->storedBaseline(), 'A refused cycle must leave the manifest byte-identical.');
+        self::assertSame([], $mails, 'A refused cycle must never alert.');
+        // A genuinely empty first run still seeds normally.
+        $this->store = [];
+        $mails = [];
+        $seeding = $this->policy([], false, $mails);
+        self::assertSame('baseline_created', $seeding->check()['status']);
+    }
+
     private function policy(
         array $scanFiles,
         bool $enabled,

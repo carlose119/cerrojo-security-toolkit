@@ -89,7 +89,6 @@ final class FileIntegrityDelta
      */
     private static function comparePaths(array $previousFiles, array $currentFiles, array $currentPaths): array
     {
-        $previous = self::canonical($previousFiles);
         $current = self::canonical($currentFiles);
 
         $paths = [];
@@ -113,10 +112,14 @@ final class FileIntegrityDelta
             }
         }
 
+        // Iterate the raw previous map, keeping only safe string keys: a watched
+        // path whose turn has not come is stored with a null hash, and the
+        // canonical map would hide its removal. When the previous hash is not a
+        // string the removal carries an empty string as its placeholder.
         $removed = [];
-        foreach ($previous as $path => $hash) {
-            if (! isset($paths[$path])) {
-                $removed[$path] = $hash;
+        foreach ($previousFiles as $path => $previousHash) {
+            if (is_string($path) && $path !== '' && ! isset($paths[$path])) {
+                $removed[$path] = is_string($previousHash) ? $previousHash : '';
             }
         }
 

@@ -269,6 +269,14 @@ final class FileIntegrityAlertPolicy
             return $this->record($refused);
         }
 
+        // An empty enumerated set against a stored manifest would be read as a
+        // total removal, and the roll that follows the comparison would wipe the
+        // stored baseline. Refuse it exactly like a missing path set. A first
+        // run with an empty enumeration has no manifest to wipe and seeds it.
+        if ($enumeratedPaths === [] && is_array($previous) && count($previous['files']) > 0) {
+            return $this->record(self::emptyResult('scan_unavailable', $at));
+        }
+
         $coverage = [
             'truncated' => count($enumeratedPaths) > FileIntegrityBaseline::MAX_PATHS,
             'unreadable' => self::listOf($scan['unreadable'] ?? []),
@@ -447,12 +455,15 @@ final class FileIntegrityAlertPolicy
             }
 
             if (self::fingerprint($finding['path'], $finding['hash']) === null) {
-                // An added path whose hashing turn has not come has no hash yet.
-                // It is listed so the count and the list agree, and it cannot be
-                // acknowledged: there is no content to compare or to mark known.
-                if ($finding['change'] !== 'added' || $finding['hash'] !== '') {
-                    return null;
+                // A path whose content was never hashed has no fingerprint. It is
+                // listed so the count and the list agree. A removal of such a path
+                // cannot be fingerprinted for acknowledgement, and it cannot
+                // re-alert because the manifest no longer holds it.
+                if (($finding['change'] === 'added' || $finding['change'] === 'removed') && $finding['hash'] === '') {
+                    continue;
                 }
+
+                return null;
             }
         }
 

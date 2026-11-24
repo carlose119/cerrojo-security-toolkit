@@ -208,7 +208,12 @@ final class FileIntegrityBaseline
             }
 
             if ($truncated) {
-                if (count($files) !== self::MAX_PATHS || $total <= count($files)) {
+                // A truncated manifest written under an earlier, smaller cap
+                // (e.g. 2000 stored paths of today's 10000) is still a valid
+                // bounded record as long as the real total exceeded what was
+                // stored; only the mismatch its own writer cannot produce is
+                // tampering.
+                if ($total <= count($files)) {
                     return null;
                 }
             } elseif ($total !== count($files)) {

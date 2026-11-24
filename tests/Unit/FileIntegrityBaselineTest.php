@@ -638,16 +638,34 @@ final class FileIntegrityBaselineTest extends TestCase
             self::assertSame(0, $store->deletes);
         }
 
-        // A footprint-bounded payload whose stored path list fell below the cap
-        // (tampered) must also be rejected.
-        $shrunken = $truncatedAtBound;
-        array_shift($shrunken['files']);
-        [$reader, $store] = $this->baseline();
-        $store->value = $shrunken;
-        self::assertNull($reader->read());
-        self::assertSame(0, $store->writes);
-        self::assertSame(0, $store->deletes);
+        // The truncated-shape rule changed with the schema-3 rotation: only the
+        // stored-vs-total mismatch rejects, not a count below the current cap.
     }
+
+    public function testALegacyTruncatedManifestUnderTheCurrentCapStillValidates(): void
+    {
+        $files = [];
+        foreach (range(1, 2000) as $index) {
+            $files[sprintf('plugins/r-%04d.php', $index)] = str_repeat('a', 64);
+        }
+        ksort($files, SORT_STRING);
+
+        foreach ([
+            ['schema' => 1, 'captured_at' => 1_000, 'files' => $files, 'total' => 2500, 'truncated' => true],
+            ['schema' => 2, 'captured_at' => 1_000, 'files' => $files, 'total' => 2500, 'truncated' => true, 'cursor' => 'plugins/r-2000.php'],
+        ] as $stored) {
+            [$reader, $store] = $this->baseline();
+            $store->value = $stored;
+
+            $read = $reader->read();
+            self::assertNotNull($read, 'A truncated manifest from the earlier 2000-file cap must keep validating.');
+            self::assertCount(2000, $read['files']);
+            self::assertSame(2500, $read['total']);
+            self::assertTrue($read['truncated']);
+            self::assertSame($stored['cursor'] ?? null, $read['cursor']);
+        }
+    }
+
 
     public function testReadTreatsAMissingOrEmptyOptionAsNoBaseline(): void
     {

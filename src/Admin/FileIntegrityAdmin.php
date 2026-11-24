@@ -409,7 +409,12 @@ final class FileIntegrityAdmin
 
             $known = $this->policy->isKnown($finding['path'], $finding['hash']);
             $state = $finding['hash'] === ''
-                ? \__('its content has not been hashed yet; it is compared at that file\'s next turn.', 'cerrojo-security-toolkit')
+                // Promise change, not a behaviour change: the previous text
+                // claimed the content is compared at the path's next turn, but
+                // the previous hash is null then, so nothing can be compared.
+                ? ($finding['change'] === 'removed'
+                    ? \__('its content was never hashed, so this reports that the path left the watched set, not that its content changed.', 'cerrojo-security-toolkit')
+                    : \__('its content has not been hashed yet; it is recorded at that file\'s first turn and compared from the turn after that.', 'cerrojo-security-toolkit'))
                 : ($known
                     ? \__('already known (reported earlier or acknowledged); it will not alert again until the acknowledgements are cleared.', 'cerrojo-security-toolkit')
                     : \__('not known yet; it alerts again on the next cycle until it is acknowledged.', 'cerrojo-security-toolkit'));
@@ -465,11 +470,15 @@ final class FileIntegrityAdmin
         echo '</form>';
         echo '<p>' . \esc_html__('Marks every finding listed above as known, so it stops alerting until the acknowledgements are cleared. Acknowledging states that you reviewed a change and consider it expected; it is not a statement that the file is safe.', 'cerrojo-security-toolkit') . '</p>';
 
+        // Promise change, not a behaviour change: clearing never resurrected a
+        // change the rolling reference had already absorbed; the old copy
+        // promised re-alerts for every current change, which was never true.
+        echo '<p>' . \esc_html__('Clears every acknowledgement, forgetting which changes were acknowledged. A file that changes again alerts again; a change that the rolling reference already absorbed is not re-reported.', 'cerrojo-security-toolkit') . '</p>';
+
         echo '<form method="post" action="' . $action . '">';
         $this->hiddenFields('forget');
         \submit_button(\esc_html__('Forget acknowledgements', 'cerrojo-security-toolkit'), 'secondary');
         echo '</form>';
-        echo '<p>' . \esc_html__('Clears every acknowledgement, so every current change alerts again on the next cycle.', 'cerrojo-security-toolkit') . '</p>';
     }
 
     private function hiddenFields(string $command): void
@@ -493,7 +502,7 @@ final class FileIntegrityAdmin
             'scan_unavailable' => \__('The scan did not return a usable result, so no baseline was written. No change was made.', 'cerrojo-security-toolkit'),
             'acknowledged' => \__('Every listed finding from the last cycle was marked known; the corresponding alert stops until the acknowledgements are cleared.', 'cerrojo-security-toolkit'),
             'nothing_to_acknowledge' => \__('There are no valid listed findings to acknowledge. No change was made.', 'cerrojo-security-toolkit'),
-            'cleared' => \__('All acknowledgements were cleared, so every current change alerts again.', 'cerrojo-security-toolkit'),
+            'cleared' => \__('All acknowledgements were cleared, forgetting which changes were acknowledged. A file that changes again alerts again; a change that the rolling reference already absorbed is not re-reported.', 'cerrojo-security-toolkit'),
             'invalid_recipients' => \__('Every recipient must be a valid email address. No change was made.', 'cerrojo-security-toolkit'),
             'recipients_required' => \__('Add at least one valid recipient before enabling alerts.', 'cerrojo-security-toolkit'),
             'write_failed' => \__('WordPress could not save the configuration. The prior state may remain.', 'cerrojo-security-toolkit'),

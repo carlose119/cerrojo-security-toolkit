@@ -212,6 +212,18 @@ final class FileIntegrityDeltaTest extends TestCase
         self::assertSame(['added' => [], 'removed' => [], 'changed' => []], $delta, 'A first-ever hash of a watched path is its baseline integration, not a change.');
     }
 
+    public function testAPathWhoseStoredHashIsNullIsReportedRemovedWithAnEmptyPlaceholder(): void
+    {
+        $delta = FileIntegrityDelta::compare(
+            ['plugins/a.php' => str_repeat('a', 64), 'plugins/new.php' => null],
+            ['plugins/a.php' => str_repeat('a', 64)],
+            ['plugins/a.php'],
+        );
+
+        self::assertSame(['plugins/new.php' => ''], $delta['removed'], 'A removal is reported even when the content was never hashed.');
+        self::assertSame(['added' => [], 'changed' => []], ['added' => $delta['added'], 'changed' => $delta['changed']]);
+    }
+
     public function testCompareWithCurrentPathsIsSortedAndPure(): void
     {
         $previous = [
