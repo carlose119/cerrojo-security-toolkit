@@ -374,6 +374,7 @@ namespace BastionSecurityWP\Tests\Unit {
                     'files' => $baselineFiles,
                     'total' => count($baselineFiles),
                     'truncated' => false,
+                    'cursor' => null,
                 ];
             }
 

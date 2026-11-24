@@ -18,7 +18,7 @@ use Throwable;
 final class FileIntegrityBaseline
 {
     public const OPTION_NAME = 'bastion_security_wp_file_integrity_baseline';
-    public const SCHEMA_VERSION = 1;
+    public const SCHEMA_VERSION = 2;
     /**
      * Hard cap protecting the stored option from unbounded growth. Beyond
      * MAX_FILES valid paths, capture keeps only the first MAX_FILES paths in
@@ -60,9 +60,13 @@ final class FileIntegrityBaseline
      * given; the coverage of that cycle belongs to the cycle's own result, which
      * is where the panel and the alert read it from.
      *
+     * The cursor names the last path this capture hashed, so the next cycle
+     * continues after it and wraps: no watched file stays outside coverage
+     * forever.
+     *
      * @param array<mixed> $files Raw map<string relativePath, string sha256>.
      */
-    public function capture(array $files, ?int $now = null): bool
+    public function capture(array $files, ?int $now = null, ?string $cursor = null): bool
     {
         try {
             $clockNow = ($this->clock)();
@@ -82,12 +86,17 @@ final class FileIntegrityBaseline
             }
 
             $normalized = self::normalize($files);
+            if ($cursor !== null && ! self::isSafePath($cursor)) {
+                return false;
+            }
+
             $payload = [
                 'schema' => self::SCHEMA_VERSION,
                 'captured_at' => $now,
                 'files' => $normalized['files'],
                 'total' => $normalized['total'],
                 'truncated' => $normalized['truncated'],
+                'cursor' => $cursor,
             ];
 
             if ((bool) ($this->writeOption)($payload)) {
@@ -107,7 +116,7 @@ final class FileIntegrityBaseline
      * malformed, tampered, or truncated shape yields null. A read never
      * writes: no option value is updated or deleted by this method.
      *
-     * @return array{schema: int, captured_at: int, files: array<string, string>, total: int, truncated: bool}|null
+     * @return array{schema: int, captured_at: int, files: array<string, string>, total: int, truncated: bool, cursor: ?string}|null
      */
     public function read(): ?array
     {
@@ -117,11 +126,20 @@ final class FileIntegrityBaseline
                 return null;
             }
 
-            if (array_keys($stored) !== ['schema', 'captured_at', 'files', 'total', 'truncated']) {
+            // A schema-1 manifest predates rotation: no cursor, so the next pass
+            // simply starts from the beginning instead of being discarded.
+            $legacy = array_keys($stored) === ['schema', 'captured_at', 'files', 'total', 'truncated'];
+            $current = array_keys($stored) === ['schema', 'captured_at', 'files', 'total', 'truncated', 'cursor'];
+
+            if (! $legacy && ! $current) {
                 return null;
             }
 
-            if ($stored['schema'] !== self::SCHEMA_VERSION) {
+            if ($legacy ? $stored['schema'] !== 1 : $stored['schema'] !== self::SCHEMA_VERSION) {
+                return null;
+            }
+
+            if ($current && $stored['cursor'] !== null && ! self::isSafePath($stored['cursor'])) {
                 return null;
             }
 
@@ -160,6 +178,9 @@ final class FileIntegrityBaseline
             } elseif ($total !== count($files)) {
                 return null;
             }
+
+            $stored['schema'] = self::SCHEMA_VERSION;
+            $stored['cursor'] = $current ? $stored['cursor'] : null;
 
             return $stored;
         } catch (Throwable) {

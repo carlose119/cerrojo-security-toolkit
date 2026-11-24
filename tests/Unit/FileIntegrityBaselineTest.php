@@ -73,7 +73,7 @@ final class FileIntegrityBaselineTest extends TestCase
         self::assertTrue($baseline->capture($this->files()));
         self::assertSame(1, $store->writes);
         self::assertSame([
-            'schema' => 1,
+            'schema' => 2,
             'captured_at' => self::CLOCK,
             'files' => [
                 'mu-plugins/sentinel.php' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -83,9 +83,10 @@ final class FileIntegrityBaselineTest extends TestCase
             ],
             'total' => 4,
             'truncated' => false,
+            'cursor' => null,
         ], $store->value);
         self::assertSame(
-            ['schema', 'captured_at', 'files', 'total', 'truncated'],
+            ['schema', 'captured_at', 'files', 'total', 'truncated', 'cursor'],
             array_keys($store->value),
             'The stored payload must keep the documented exact key order.',
         );
@@ -145,11 +146,12 @@ final class FileIntegrityBaselineTest extends TestCase
 
         self::assertTrue($baseline->capture([]));
         self::assertSame([
-            'schema' => 1,
+            'schema' => 2,
             'captured_at' => self::CLOCK,
             'files' => [],
             'total' => 0,
             'truncated' => false,
+            'cursor' => null,
         ], $store->value);
     }
 
@@ -356,11 +358,12 @@ final class FileIntegrityBaselineTest extends TestCase
     public function testReadAcceptsAValidStoredPayloadAndYieldsItUnchanged(): void
     {
         $payload = [
-            'schema' => 1,
+            'schema' => 2,
             'captured_at' => 1_000,
             'files' => ['plugins/a.php' => str_repeat('a', 64)],
             'total' => 1,
             'truncated' => false,
+            'cursor' => null,
         ];
         [$reader, $store] = $this->baseline();
         $store->value = $payload;
@@ -376,14 +379,45 @@ final class FileIntegrityBaselineTest extends TestCase
         self::assertSame($truncated, $reader->read());
     }
 
-    public function testReadYieldsNullForEveryMalformedStoredShapeAndNeverWritesOrDeletes(): void
+    public function testTheCursorRoundTripsAndALegacyManifestIsReadAsNoCursor(): void
     {
-        $valid = [
+        [$baseline, $store] = $this->baseline();
+
+        self::assertTrue($baseline->capture(['plugins/b.php' => str_repeat('b', 64)], self::CLOCK, 'plugins/b.php'));
+        self::assertSame('plugins/b.php', $store->value['cursor'] ?? null);
+
+        $read = $baseline->read();
+        self::assertIsArray($read);
+        self::assertSame('plugins/b.php', $read['cursor'], 'The next cycle must know where to continue.');
+
+        // A manifest written before rotation existed has no cursor; it must still
+        // be usable, starting a fresh pass instead of being discarded.
+        $legacy = [
             'schema' => 1,
             'captured_at' => 1_000,
             'files' => ['plugins/a.php' => str_repeat('a', 64)],
             'total' => 1,
             'truncated' => false,
+        ];
+        [$reader, $legacyStore] = $this->baseline();
+        $legacyStore->value = $legacy;
+
+        $read = $reader->read();
+        self::assertIsArray($read);
+        self::assertNull($read['cursor']);
+        self::assertSame(FileIntegrityBaseline::SCHEMA_VERSION, $read['schema']);
+        self::assertSame(0, $legacyStore->writes, 'Reading a legacy manifest must not rewrite it.');
+    }
+
+    public function testReadYieldsNullForEveryMalformedStoredShapeAndNeverWritesOrDeletes(): void
+    {
+        $valid = [
+            'schema' => 2,
+            'captured_at' => 1_000,
+            'files' => ['plugins/a.php' => str_repeat('a', 64)],
+            'total' => 1,
+            'truncated' => false,
+            'cursor' => null,
         ];
 
         $unsorted = $valid;
@@ -403,8 +437,9 @@ final class FileIntegrityBaselineTest extends TestCase
             [],
             ['schema' => 1],
             ['captured_at' => 1_000, 'schema' => 1, 'files' => [], 'total' => 0, 'truncated' => false],
+            array_merge($valid, ['cursor' => '../escape.php']),
             array_merge($valid, ['extra' => true]),
-            array_merge($valid, ['schema' => 2]),
+            array_merge($valid, ['schema' => 3]),
             array_merge($valid, ['schema' => '1']),
             array_merge($valid, ['captured_at' => 0]),
             array_merge($valid, ['captured_at' => '1_000']),
@@ -496,11 +531,12 @@ final class FileIntegrityBaselineTest extends TestCase
     private function truncatedPayload(): array
     {
         $payload = [
-            'schema' => 1,
+            'schema' => 2,
             'captured_at' => 1_000,
             'files' => [],
             'total' => 2001,
             'truncated' => true,
+            'cursor' => null,
         ];
         foreach (range(1, 2000) as $index) {
             $payload['files'][sprintf('plugins/r-%04d.php', $index)] = str_repeat('a', 64);

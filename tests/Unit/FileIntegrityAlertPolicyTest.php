@@ -260,6 +260,7 @@ final class FileIntegrityAlertPolicyTest extends TestCase
                 'files' => $baselineFiles,
                 'total' => count($baselineFiles),
                 'truncated' => false,
+                'cursor' => null,
             ];
         }
 
