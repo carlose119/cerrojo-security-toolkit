@@ -321,7 +321,7 @@ final class FileIntegrityScannerTest extends TestCase
     {
         self::assertFalse(defined('WP_CONTENT_DIR'), 'Test environment must run without WordPress.');
 
-        $result = new FileIntegrityScanner()->scan();
+        $result = (new FileIntegrityScanner())->scan();
 
         self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => [], 'surfaces' => ['plugins' => ['total' => 0, 'hashed' => 0], 'mu-plugins' => ['total' => 0, 'hashed' => 0], 'themes' => ['total' => 0, 'hashed' => 0]]], $result);
     }
