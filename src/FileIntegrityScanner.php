@@ -62,7 +62,7 @@ final class FileIntegrityScanner
      * the walk order and the returned map are deterministic (sorted by
      * relative path), so two scans of the same tree yield the same array.
      *
-     * @return array{files: array<string, string>, total: int, truncated: bool, unreadable: list<string>, skipped: list<string>}
+     * @return array{files: array<string, string>, total: int, truncated: bool, unreadable: list<string>, skipped: list<string>, failed_surfaces: list<string>}
      *         `files` maps relative path (surface/rest/of/path.php, forward
      *         slashes, no leading slash) to lowercase SHA-256 and holds at
      *         most first-MAX_FILES sorted entries; `total` is the real count
@@ -72,7 +72,10 @@ final class FileIntegrityScanner
      *         states that candidates beyond MAX_FILES were not hashed;
      *         `unreadable` lists every candidate whose size or hash could not
      *         be verified; `skipped` lists every candidate excluded by the
-     *         size bound. All lists and the path map are sorted.
+     *         size bound; `failed_surfaces` names a surface whose directory
+     *         could not be enumerated at all, which makes the capture partial
+     *         and never a clean comparison. All lists and the path map are
+     *         sorted.
      */
     public function scan(): array
     {
@@ -83,13 +86,25 @@ final class FileIntegrityScanner
             }
 
             $candidates = [];
+            $failedSurfaces = [];
             foreach (self::SURFACES as $surface) {
                 $surfaceDir = $root . DIRECTORY_SEPARATOR . $surface;
                 if (! (bool) ($this->exists)($surfaceDir)) {
                     continue;
                 }
 
-                foreach (array_values(($this->walker)($surfaceDir)) as $path) {
+                // One surface that cannot be enumerated only makes the capture
+                // partial. Letting it abort the whole walk would return an empty
+                // result that reads as "no watched files", and the comparison
+                // would then report every known file as removed.
+                try {
+                    $walked = array_values(($this->walker)($surfaceDir));
+                } catch (Throwable) {
+                    $failedSurfaces[] = $surface;
+                    continue;
+                }
+
+                foreach ($walked as $path) {
                     if (! is_string($path) || $path === '') {
                         continue;
                     }
@@ -155,16 +170,19 @@ final class FileIntegrityScanner
                 'truncated' => $truncated,
                 'unreadable' => $unreadable,
                 'skipped' => $skipped,
+                'failed_surfaces' => $failedSurfaces,
             ];
         } catch (Throwable) {
+            // An unexpected failure still describes an incomplete capture, never a
+            // clean empty one: the caller must not compare it against a baseline.
             return self::empty();
         }
     }
 
-    /** @return array{files: array<string, string>, total: int, truncated: bool, unreadable: list<string>, skipped: list<string>} */
+    /** @return array{files: array<string, string>, total: int, truncated: bool, unreadable: list<string>, skipped: list<string>, failed_surfaces: list<string>} */
     private static function empty(): array
     {
-        return ['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => []];
+        return ['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => []];
     }
 
     /**

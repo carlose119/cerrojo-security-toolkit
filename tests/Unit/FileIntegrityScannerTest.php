@@ -242,7 +242,7 @@ final class FileIntegrityScannerTest extends TestCase
 
         $result = $this->makeScanner($root)->scan();
 
-        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => []], $result);
+        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => []], $result);
     }
 
     public function testDefaultContentDirectoryResolverYieldsAnEmptyResultWhenWpContentDirIsNotDefined(): void
@@ -251,7 +251,7 @@ final class FileIntegrityScannerTest extends TestCase
 
         $result = new FileIntegrityScanner()->scan();
 
-        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => []], $result);
+        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => []], $result);
     }
 
     public function testAnUnreadableContentDirectoryReturnsAnEmptyResultWithoutThrowing(): void
@@ -263,7 +263,39 @@ final class FileIntegrityScannerTest extends TestCase
             throw new RuntimeException('simulated unreadable directory: ' . $directory);
         })->scan();
 
-        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => []], $result);
+        self::assertSame([], $result['files']);
+        self::assertSame(['plugins'], $result['failed_surfaces'], 'A surface that cannot be enumerated is named, so the capture is partial rather than clean.');
+        self::assertSame(0, $result['total']);
+    }
+
+    public function testOneUnreadableSurfaceDoesNotDiscardTheOthers(): void
+    {
+        $root = $this->tempTree();
+        $this->write($root, 'plugins/ok/ok.php', '<?php ok;');
+        $this->write($root, 'themes/t/t.php', '<?php t;');
+
+        $result = $this->makeScanner($root, walker: static function (string $directory): array {
+            if (str_contains(str_replace(DIRECTORY_SEPARATOR, '/', $directory), '/themes')) {
+                throw new RuntimeException('simulated unreadable surface: ' . $directory);
+            }
+
+            $paths = [];
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($iterator as $file) {
+                if ($file->isFile()) {
+                    $paths[] = $file->getPathname();
+                }
+            }
+
+            sort($paths, SORT_STRING);
+
+            return $paths;
+        })->scan();
+
+        self::assertSame(['plugins/ok/ok.php' => hash('sha256', '<?php ok;')], $result['files'], 'The readable surface is still captured.');
+        self::assertSame(['themes'], $result['failed_surfaces']);
     }
 
     public function testScanNeverMutatesTheScannedTree(): void

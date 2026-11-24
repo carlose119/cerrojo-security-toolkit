@@ -221,6 +221,17 @@ final class FileIntegrityAlertPolicy
             return $this->record(self::emptyResult('scan_unavailable', $at));
         }
 
+        // A surface that could not be enumerated makes the capture partial. The
+        // empty-or-partial file map must never be compared against a baseline: it
+        // would report every known file as removed while claiming full coverage.
+        $failedSurfaces = is_array($scan['failed_surfaces'] ?? null) ? $scan['failed_surfaces'] : [];
+        if ($failedSurfaces !== []) {
+            $partial = self::emptyResult('scan_unavailable', $at);
+            $partial['unreadable'] = count($failedSurfaces);
+
+            return $this->record($partial);
+        }
+
         $coverage = [
             'truncated' => (bool) ($scan['truncated'] ?? false),
             'unreadable' => self::listOf($scan['unreadable'] ?? []),

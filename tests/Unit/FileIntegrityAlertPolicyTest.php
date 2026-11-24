@@ -162,6 +162,25 @@ final class FileIntegrityAlertPolicyTest extends TestCase
         self::assertSame($result, $this->storedResult());
     }
 
+    public function testAPartiallyEnumeratedCaptureIsNeverComparedAgainstTheBaseline(): void
+    {
+        $mails = [];
+        $policy = $this->policy(
+            ['plugins/a.php' => self::HASH_A],
+            enabled: true,
+            mails: $mails,
+            baselineFiles: ['plugins/a.php' => self::HASH_A, 'plugins/b.php' => self::HASH_B],
+            scanExtra: ['failed_surfaces' => ['themes']],
+        );
+
+        $result = $policy->check();
+
+        self::assertSame('scan_unavailable', $result['status']);
+        self::assertSame(0, $result['removed'], 'A surface that could not be enumerated is not a set of removals.');
+        self::assertSame(0, $result['changed']);
+        self::assertSame([], $mails, 'A partial capture must never alert.');
+    }
+
     public function testAFailedTransportIsRecordedAndNeverThrows(): void
     {
         $mails = [];
