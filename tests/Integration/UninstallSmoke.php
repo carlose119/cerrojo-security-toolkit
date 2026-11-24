@@ -76,7 +76,11 @@ foreach (Uninstall::transientPrefixes() as $prefix) {
     }
 }
 
-uninstallCheck(count($setOwned) === 14, 'Expected fourteen seeded plugin options.');
+uninstallCheck(
+    count($setOwned) === count(Uninstall::optionNames()),
+    'Seeded option count does not match the removal boundary.',
+);
+uninstallCheck(count($setOwned) > 0, 'The removal boundary is empty.');
 
 $ownershipProbe = static function (string $pattern) use ($wpdb): int {
     // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- fixed pattern from the class under test.
