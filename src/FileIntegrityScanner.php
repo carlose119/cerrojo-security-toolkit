@@ -217,6 +217,12 @@ final class FileIntegrityScanner
      * sorted, so the enumeration is deterministic regardless of the order the
      * filesystem reports. A missing directory yields an empty list.
      *
+     * Hidden directories are never entered. Version-control metadata and tool
+     * caches live there, and in this repository `.git` even holds frozen review
+     * snapshots that are full copies of the plugin: walking them reports hundreds
+     * of files as added or removed that were never installed code, and burns the
+     * file bound before the real surfaces are reached.
+     *
      * @return list<string>
      */
     private static function walk(string $directory): array
@@ -227,7 +233,10 @@ final class FileIntegrityScanner
 
         $paths = [];
         $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+            new \RecursiveCallbackFilterIterator(
+                new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+                static fn (\SplFileInfo $item): bool => ! $item->isDir() || ! str_starts_with($item->getFilename(), '.'),
+            ),
         );
         foreach ($iterator as $item) {
             if ($item->isFile()) {

@@ -71,6 +71,19 @@ final class FileIntegrityScannerTest extends TestCase
         self::assertSame([], $result['unreadable']);
     }
 
+    public function testHiddenDirectoriesAreNeverWalked(): void
+    {
+        $root = $this->tempTree();
+        $this->write($root, 'plugins/real/real.php', '<?php real;');
+        $this->write($root, 'plugins/real/.git/gentle-ai/candidate-views/view/cerrojo.php', '<?php snapshot;');
+        $this->write($root, 'plugins/real/.build/stage/plugin.php', '<?php staged;');
+
+        $result = (new FileIntegrityScanner(contentDir: static fn (): string => $root))->scan();
+
+        self::assertSame(['plugins/real/real.php' => hash('sha256', '<?php real;')], $result['files'], 'Version-control metadata and tool caches are not installed code.');
+        self::assertSame(1, $result['total']);
+    }
+
     public function testIdenticalContentHashesStablyAndOneChangedByteHashesDifferently(): void
     {
         $root = $this->tempTree();
