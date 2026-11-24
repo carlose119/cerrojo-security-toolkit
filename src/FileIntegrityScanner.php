@@ -149,7 +149,7 @@ final class FileIntegrityScanner
     public function enumerate(): ?array
     {
         try {
-            $root = trim((string) ($this->contentDir)(), "/\\");
+            $root = rtrim((string) ($this->contentDir)(), "/\\");
             if ($root === '') {
                 return ['paths' => [], 'total' => 0, 'surfaces' => [], 'failed_surfaces' => []];
             }
@@ -269,12 +269,16 @@ final class FileIntegrityScanner
      */
     private static function relativeTo(string $path, string $directory): ?string
     {
-        $prefix = $directory . DIRECTORY_SEPARATOR;
-        if (! str_starts_with($path, $prefix)) {
+        // Compare separator-agnostically: a walker may legitimately hand back
+        // either slash, and mixing them must not make a watched file invisible.
+        $normalizedPath = str_replace('\\', '/', $path);
+        $normalizedDirectory = rtrim(str_replace('\\', '/', $directory), '/');
+
+        if (! str_starts_with($normalizedPath, $normalizedDirectory . '/')) {
             return null;
         }
 
-        $relative = str_replace('\\', '/', substr($path, strlen($prefix)));
+        $relative = substr($normalizedPath, strlen($normalizedDirectory) + 1);
 
         // A prefix test alone would accept a walked path that climbs back out with
         // `..` segments. Every segment has to be a real name for the path to be

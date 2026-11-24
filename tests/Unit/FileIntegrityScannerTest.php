@@ -124,6 +124,25 @@ final class FileIntegrityScannerTest extends TestCase
         self::assertSame(1, $result['total']);
     }
 
+    public function testAPosixAbsoluteContentDirectoryKeepsItsLeadingSlash(): void
+    {
+        // The bug this pins shipped to CI and passed on Windows: trimming the
+        // root turned "/tmp/site/wp-content" into a relative path, nothing matched
+        // the walker output, and every scan came back empty on Linux.
+        $scanner = new FileIntegrityScanner(
+            contentDir: static fn (): string => '/tmp/site/wp-content/',
+            walker: static fn (string $directory): array => [$directory . '/acme/acme.php'],
+            hasher: static fn (string $path): string|false => str_repeat('a', 64),
+            sizeOf: static fn (string $path): int|false => 10,
+            exists: static fn (string $path): bool => true,
+        );
+
+        $result = $scanner->scan();
+
+        self::assertArrayHasKey('plugins/acme/acme.php', $result['files'], 'A POSIX absolute root must keep its leading slash.');
+        self::assertSame(3, count($result['files']));
+    }
+
     public function testIdenticalContentHashesStablyAndOneChangedByteHashesDifferently(): void
     {
         $root = $this->tempTree();
