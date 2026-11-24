@@ -54,6 +54,46 @@ final class FileIntegrityScannerTest extends TestCase
         self::assertSame([], $result['skipped']);
     }
 
+    public function testEnumerateListsEveryCandidateWithoutHashingAnyOfIt(): void
+    {
+        $root = $this->tempTree();
+        $this->write($root, 'plugins/a/a.php', '<?php a;');
+        $this->write($root, 'themes/t/t.php', '<?php t;');
+        $this->write($root, 'themes/t/style.css', 'body{}');
+
+        $hashed = 0;
+        $scanner = $this->makeScanner($root, hasher: static function (string $path) use (&$hashed): string {
+            ++$hashed;
+
+            return hash('sha256', (string) file_get_contents($path));
+        });
+
+        $enumerated = $scanner->enumerate();
+
+        self::assertIsArray($enumerated);
+        self::assertSame(0, $hashed, 'Enumerating must not hash: that is what makes path coverage complete every cycle.');
+        self::assertSame(['plugins/a/a.php', 'themes/t/t.php'], array_keys($enumerated['paths']));
+        self::assertSame(['plugins' => ['total' => 1], 'mu-plugins' => ['total' => 0], 'themes' => ['total' => 1]], $enumerated['surfaces']);
+    }
+
+    public function testHashPathsStopsAtTheByteBudgetAndSaysSo(): void
+    {
+        $root = $this->tempTree();
+        $this->write($root, 'plugins/a/one.php', str_repeat('a', 100));
+        $this->write($root, 'plugins/a/two.php', str_repeat('b', 100));
+
+        $scanner = $this->makeScanner($root);
+        $enumerated = $scanner->enumerate();
+        self::assertIsArray($enumerated);
+
+        $result = $scanner->hashPaths($enumerated['paths'], 150);
+
+        self::assertSame(['plugins/a/one.php'], array_keys($result['files']));
+        self::assertTrue($result['truncated']);
+        self::assertSame(100, $result['bytes']);
+        self::assertSame(['plugins/a/two.php'], $result['skipped']);
+    }
+
     public function testScanIgnoresFilesWhoseExtensionIsNotExecutable(): void
     {
         $root = $this->tempTree();
@@ -255,7 +295,7 @@ final class FileIntegrityScannerTest extends TestCase
 
         $result = $this->makeScanner($root)->scan();
 
-        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => []], $result);
+        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => [], 'surfaces' => ['plugins' => ['total' => 0, 'hashed' => 0], 'mu-plugins' => ['total' => 0, 'hashed' => 0], 'themes' => ['total' => 0, 'hashed' => 0]]], $result);
     }
 
     public function testDefaultContentDirectoryResolverYieldsAnEmptyResultWhenWpContentDirIsNotDefined(): void
@@ -264,7 +304,7 @@ final class FileIntegrityScannerTest extends TestCase
 
         $result = new FileIntegrityScanner()->scan();
 
-        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => []], $result);
+        self::assertSame(['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => [], 'surfaces' => ['plugins' => ['total' => 0, 'hashed' => 0], 'mu-plugins' => ['total' => 0, 'hashed' => 0], 'themes' => ['total' => 0, 'hashed' => 0]]], $result);
     }
 
     public function testAnUnreadableContentDirectoryReturnsAnEmptyResultWithoutThrowing(): void

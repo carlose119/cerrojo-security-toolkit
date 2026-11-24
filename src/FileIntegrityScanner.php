@@ -27,8 +27,12 @@ use Throwable;
  */
 final class FileIntegrityScanner
 {
-    /** Hard cap on hashed entries; when more candidates exist the exact kept set is the first MAX_FILES in sorted order. */
-    public const MAX_FILES = 2000;
+    /** Cap on hashed entries per surface: themes sort after plugins, and one global cap would never compare them. */
+    public const MAX_FILES_PER_SURFACE = 2000;
+    /** Legacy alias kept for callers that still name the global bound. */
+    public const MAX_FILES = self::MAX_FILES_PER_SURFACE;
+    /** Byte budget for one cycle: hashing cost is bytes, not file count. */
+    public const MAX_TOTAL_BYTES = 268435456;
     /** Hashing is skipped for any candidate reported larger than this, so one outsized file cannot dominate a cycle. */
     public const MAX_FILE_BYTES = 8388608;
     /** @var list<string> */
@@ -80,23 +84,88 @@ final class FileIntegrityScanner
     public function scan(): array
     {
         try {
-            $root = trim((string) ($this->contentDir)(), "/\\");
-            if ($root === '') {
+            $enumerated = $this->enumerate();
+            if ($enumerated === null) {
                 return self::empty();
             }
 
-            $candidates = [];
+            $files = [];
+            $unreadable = [];
+            $skipped = [];
+            $surfaces = [];
+            $truncated = false;
+            $budget = self::MAX_TOTAL_BYTES;
+
+            foreach (self::SURFACES as $surface) {
+                $mine = [];
+                foreach ($enumerated['paths'] as $key => $path) {
+                    if (str_starts_with($key, $surface . '/')) {
+                        $mine[$key] = $path;
+                    }
+                }
+
+                ksort($mine, SORT_STRING);
+                $kept = array_slice($mine, 0, self::MAX_FILES_PER_SURFACE, true);
+                if (count($kept) < ($enumerated['surfaces'][$surface]['total'] ?? 0)) {
+                    $truncated = true;
+                }
+
+                $result = $this->hashPaths($kept, $budget);
+                $files += $result['files'];
+                $unreadable = array_merge($unreadable, $result['unreadable']);
+                $skipped = array_merge($skipped, $result['skipped']);
+                $truncated = $truncated || $result['truncated'];
+                $budget -= $result['bytes'];
+
+                $surfaces[$surface] = ['total' => $enumerated['surfaces'][$surface]['total'] ?? 0, 'hashed' => count($result['files'])];
+            }
+
+            ksort($files, SORT_STRING);
+            sort($skipped, SORT_STRING);
+            sort($unreadable, SORT_STRING);
+
+            return [
+                'files' => $files,
+                'total' => $enumerated['total'],
+                'truncated' => $truncated,
+                'unreadable' => $unreadable,
+                'skipped' => $skipped,
+                'failed_surfaces' => $enumerated['failed_surfaces'],
+                'surfaces' => $surfaces,
+            ];
+        } catch (Throwable) {
+            return self::empty();
+        }
+    }
+
+    /**
+     * Every candidate path under the three surfaces, without hashing any of them.
+     * The walk is cheap, so a cycle can always know the complete set of watched
+     * paths and report additions and removals immediately, whatever slice of the
+     * contents it happens to hash this time.
+     *
+     * @return array{paths: array<string, string>, total: int, surfaces: array<string, array{total: int}>, failed_surfaces: list<string>}|null
+     */
+    public function enumerate(): ?array
+    {
+        try {
+            $root = trim((string) ($this->contentDir)(), "/\\");
+            if ($root === '') {
+                return ['paths' => [], 'total' => 0, 'surfaces' => [], 'failed_surfaces' => []];
+            }
+
+            $paths = [];
+            $surfaces = [];
             $failedSurfaces = [];
+
             foreach (self::SURFACES as $surface) {
                 $surfaceDir = $root . DIRECTORY_SEPARATOR . $surface;
+                $surfaces[$surface] = ['total' => 0];
+
                 if (! (bool) ($this->exists)($surfaceDir)) {
                     continue;
                 }
 
-                // One surface that cannot be enumerated only makes the capture
-                // partial. Letting it abort the whole walk would return an empty
-                // result that reads as "no watched files", and the comparison
-                // would then report every known file as removed.
                 try {
                     $walked = array_values(($this->walker)($surfaceDir));
                 } catch (Throwable) {
@@ -109,8 +178,7 @@ final class FileIntegrityScanner
                         continue;
                     }
 
-                    $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-                    if (! in_array($extension, self::EXTENSIONS, true)) {
+                    if (! in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), self::EXTENSIONS, true)) {
                         continue;
                     }
 
@@ -119,70 +187,78 @@ final class FileIntegrityScanner
                         continue;
                     }
 
-                    $candidates[$surface . '/' . $relative] = (string) $path;
+                    ++$surfaces[$surface]['total'];
+                    $paths[$surface . '/' . $relative] = (string) $path;
                 }
             }
 
-            ksort($candidates, SORT_STRING);
-            $total = count($candidates);
-            $truncated = $total > self::MAX_FILES;
+            ksort($paths, SORT_STRING);
 
-            $files = [];
-            $unreadable = [];
-            $skipped = [];
-            $kept = array_slice($candidates, 0, self::MAX_FILES, true);
-            foreach ($kept as $relative => $path) {
-                $size = ($this->sizeOf)($path);
-                if (! is_int($size) || $size < 0) {
-                    // A candidate whose size cannot be read cannot be hashed either: it is
-                    // unverifiable, not a file that merely exceeded the size bound.
-                    $unreadable[] = (string) $relative;
-                    continue;
-                }
-
-                if ($size > self::MAX_FILE_BYTES) {
-                    $skipped[] = (string) $relative;
-                    continue;
-                }
-
-                if (! (bool) ($this->exists)($path)) {
-                    // The file vanished between the walk and the verification: it cannot be read, so it is unverifiable (S12), never unchanged.
-                    $unreadable[] = (string) $relative;
-                    continue;
-                }
-
-                $hash = ($this->hasher)($path);
-                if (! is_string($hash) || preg_match('/^[0-9a-f]{64}$/D', $hash) !== 1) {
-                    $unreadable[] = (string) $relative;
-                    continue;
-                }
-
-                $files[(string) $relative] = $hash;
-            }
-
-            ksort($files, SORT_STRING);
-            sort($skipped, SORT_STRING);
-            sort($unreadable, SORT_STRING);
-
-            return [
-                'files' => $files,
-                'total' => $total,
-                'truncated' => $truncated,
-                'unreadable' => $unreadable,
-                'skipped' => $skipped,
-                'failed_surfaces' => $failedSurfaces,
-            ];
+            return ['paths' => $paths, 'total' => count($paths), 'surfaces' => $surfaces, 'failed_surfaces' => $failedSurfaces];
         } catch (Throwable) {
-            // An unexpected failure still describes an incomplete capture, never a
-            // clean empty one: the caller must not compare it against a baseline.
-            return self::empty();
+            return null;
         }
+    }
+
+    /**
+     * Hash the given candidates, in the order received, until the byte budget runs
+     * out. Nothing here decides what to hash: that is the caller's rotation.
+     *
+     * @param array<string, string> $pathsByKey
+     * @return array{files: array<string, string>, unreadable: list<string>, skipped: list<string>, bytes: int, truncated: bool}
+     */
+    public function hashPaths(array $pathsByKey, int $maxBytes): array
+    {
+        $files = [];
+        $unreadable = [];
+        $skipped = [];
+        $bytes = 0;
+        $truncated = false;
+
+        foreach ($pathsByKey as $key => $path) {
+            $size = ($this->sizeOf)($path);
+
+            if (! is_int($size) || $size < 0) {
+                $unreadable[] = (string) $key;
+                continue;
+            }
+
+            if ($size > self::MAX_FILE_BYTES) {
+                $skipped[] = (string) $key;
+                continue;
+            }
+
+            if ($bytes + $size > $maxBytes) {
+                $truncated = true;
+                $skipped[] = (string) $key;
+                continue;
+            }
+
+            if (! (bool) ($this->exists)($path)) {
+                $unreadable[] = (string) $key;
+                continue;
+            }
+
+            $hash = ($this->hasher)($path);
+            if (! is_string($hash) || preg_match('/^[0-9a-f]{64}$/D', $hash) !== 1) {
+                $unreadable[] = (string) $key;
+                continue;
+            }
+
+            $files[(string) $key] = $hash;
+            $bytes += $size;
+        }
+
+        sort($skipped, SORT_STRING);
+        sort($unreadable, SORT_STRING);
+
+        return ['files' => $files, 'unreadable' => $unreadable, 'skipped' => $skipped, 'bytes' => $bytes, 'truncated' => $truncated];
     }
 
     /** @return array{files: array<string, string>, total: int, truncated: bool, unreadable: list<string>, skipped: list<string>, failed_surfaces: list<string>} */
     private static function empty(): array
     {
-        return ['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => []];
+        return ['files' => [], 'total' => 0, 'truncated' => false, 'unreadable' => [], 'skipped' => [], 'failed_surfaces' => [], 'surfaces' => []];
     }
 
     /**
